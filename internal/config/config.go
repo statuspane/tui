@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	EnvAPIKey  = "STATUSPANE_API_KEY"
+	EnvAPIKey  = "STATUSPANE_API_KEY" //nolint:gosec // the name of an environment variable, not a credential
 	EnvBaseURL = "STATUSPANE_URL"
 
 	DefaultBaseURL = "https://statuspane.io"
@@ -60,6 +60,5 @@ func missingAPIKeyError(path string) error {
 
 Set %s, or create %s containing:
 
-  api_key = "sp_..."   # an organization API key
-`, EnvAPIKey, path)
+  api_key = "sp_..."   # an organization API key`, EnvAPIKey, path)
 }

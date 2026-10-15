@@ -113,7 +113,7 @@ func TestUnauthorizedBecomesAPIError(t *testing.T) {
 }
 
 func TestRateLimitedExposesRetryAfter(t *testing.T) {
-	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Retry-After", "42")
 		writeJSON(w, http.StatusTooManyRequests, `{"error":{"code":"rate_limited","message":"Too many requests."}}`)
 	})
