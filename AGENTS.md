@@ -30,6 +30,10 @@ organization API key and uses only what the public API exposes.
   is doing the committing, it shows the diff and waits for explicit go-ahead before running
   `git commit` — one commit at a time, never batched.
 - Comments only for a non-obvious why, usually one line. Never reference issue numbers in code.
+- A PR that changes what a user of the binary sees adds a line under `## [Unreleased]` in
+  `CHANGELOG.md` (Added, Changed, Fixed, Removed), written for users, not contributors.
+  Refactors, CI and docs-only changes don't. A release renames `Unreleased` to the version and
+  date, then tags it.
 - Before considering a change done, run `mise run ci`.
 
 ## Go conventions here

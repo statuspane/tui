@@ -6,7 +6,7 @@ Closes #
 
 ## Changes
 
-<!-- What changed, by area. -->
+<!-- What changed, by area. User-facing? Add a line under Unreleased in CHANGELOG.md, or say there is none. -->
 
 ## Testing
 
