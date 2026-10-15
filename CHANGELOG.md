@@ -6,6 +6,11 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-15
+
+The first release: a read-only prototype. Creating and deleting apps and choosing which
+components an app watches are not here yet.
+
 ### Added
 
 - The apps screen: your organization's apps with their overall status and how many components
@@ -19,3 +24,6 @@ All notable user-facing changes are listed here. The format follows
   such as a local server.
 - Plain explanations for the common failures: a missing API key prints an example config file,
   a rejected key names the setting to check, and a rate limit says how long to wait.
+
+[Unreleased]: https://github.com/statuspane/tui/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/statuspane/tui/releases/tag/v0.1.0
