@@ -1,2 +1,32 @@
 [tools]
 go = "1.27.2"
+golangci-lint = "2.14.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "latest"
+
+[tasks.fmt]
+description = "Format the code (gofmt and goimports through golangci-lint)"
+run = "golangci-lint fmt"
+
+[tasks.lint]
+description = "Run the linters and check formatting"
+run = "golangci-lint run"
+
+[tasks.test]
+description = "Run the tests with the race detector"
+run = "go test -race -count=1 ./..."
+
+[tasks.vuln]
+description = "Scan dependencies and the standard library for known vulnerabilities"
+run = "govulncheck ./..."
+
+[tasks.tidy]
+description = "Fail if go.mod or go.sum need `go mod tidy`"
+run = "go mod tidy -diff"
+
+[tasks.build]
+description = "Build the binary and vet the code"
+run = ["go vet ./...", "go build -o statuspane ."]
+
+[tasks.ci]
+description = "Run every check CI runs, in order"
+depends = ["lint", "build", "test", "tidy", "vuln"]
