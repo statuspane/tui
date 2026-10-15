@@ -6,6 +6,12 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The program is now called `statuspane-tui`. Install it with
+  `go install github.com/statuspane/tui/cmd/statuspane-tui@latest`; the old install path
+  produced a binary named `tui`.
+
 ## [0.1.0] - 2026-10-15
 
 The first release: a read-only prototype. Creating and deleting apps and choosing which
