@@ -5,32 +5,33 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+
+	"github.com/matiasleidemer/statuspane-tui/internal/api"
+	"github.com/matiasleidemer/statuspane-tui/internal/config"
+	"github.com/matiasleidemer/statuspane-tui/internal/ui"
 )
 
-var titleStyle = lipgloss.NewStyle().Bold(true)
-
-type model struct{}
-
-func (m model) Init() tea.Cmd { return nil }
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyPressMsg); ok {
-		switch key.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		}
-	}
-	return m, nil
-}
-
-func (m model) View() tea.View {
-	return tea.NewView(titleStyle.Render("StatusPane") + "\n\nPress q to quit.\n")
-}
+// Overridden at release time with -ldflags "-X main.version=...".
+var version = "dev"
 
 func main() {
-	if _, err := tea.NewProgram(model{}).Run(); err != nil {
+	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func run() error {
+	configPath, err := config.DefaultPath(os.Getenv, os.UserHomeDir)
+	if err != nil {
+		return err
+	}
+	cfg, err := config.Load(configPath, os.Getenv)
+	if err != nil {
+		return err
+	}
+
+	client := api.NewClient(cfg.BaseURL, cfg.APIKey, version)
+	_, err = tea.NewProgram(ui.NewAppsModel(client)).Run()
+	return err
 }
