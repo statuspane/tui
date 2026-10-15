@@ -193,6 +193,8 @@ func errorMessage(err error) string {
 			return "The API key was rejected. Check " + config.EnvAPIKey + "."
 		case api.CodeRateLimited:
 			return "Rate limited. Try again in " + secondsText(apiErr.RetryAfter) + "."
+		case api.CodeNotFound:
+			return "Not found. It may have been deleted or renamed."
 		}
 	}
 	return err.Error()
