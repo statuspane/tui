@@ -18,3 +18,11 @@ var (
 	mutedStyle    = lipgloss.NewStyle().Foreground(colorMuted)
 	errorStyle    = lipgloss.NewStyle().Foreground(colorRed)
 )
+
+// Keyed by the API's incident impact levels.
+var impactStyles = map[string]lipgloss.Style{
+	"none":     mutedStyle,
+	"minor":    lipgloss.NewStyle().Foreground(colorYellow),
+	"major":    lipgloss.NewStyle().Foreground(colorOrange),
+	"critical": lipgloss.NewStyle().Foreground(colorRed),
+}

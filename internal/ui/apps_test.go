@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/matiasleidemer/statuspane-tui/internal/api"
+	"github.com/statuspane/tui/internal/api"
 )
 
 type fakeAppLister struct {

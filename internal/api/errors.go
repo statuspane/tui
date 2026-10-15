@@ -12,6 +12,7 @@ import (
 const (
 	CodeUnauthorized = "unauthorized"
 	CodeRateLimited  = "rate_limited"
+	CodeNotFound     = "not_found"
 )
 
 // APIError is a non-2xx response. Code and Message come from the API's error body
