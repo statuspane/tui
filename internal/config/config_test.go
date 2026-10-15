@@ -57,17 +57,25 @@ func TestLoadWorksWithoutFile(t *testing.T) {
 	}
 }
 
-func TestLoadRequiresKeyAndURL(t *testing.T) {
+func TestLoadRequiresAPIKey(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "nope.toml")
 
 	_, err := Load(missing, env(map[string]string{EnvBaseURL: "https://env.example"}))
+
 	if err == nil || !strings.Contains(err.Error(), "API key") {
 		t.Fatalf("want API key error, got %v", err)
 	}
+}
 
-	_, err = Load(missing, env(map[string]string{EnvAPIKey: "sp_env"}))
-	if err == nil || !strings.Contains(err.Error(), "base URL") {
-		t.Fatalf("want base URL error, got %v", err)
+func TestLoadDefaultsBaseURL(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope.toml")
+
+	cfg, err := Load(missing, env(map[string]string{EnvAPIKey: "sp_env"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BaseURL != DefaultBaseURL {
+		t.Fatalf("BaseURL = %q, want %q", cfg.BaseURL, DefaultBaseURL)
 	}
 }
 
@@ -110,5 +118,17 @@ func TestDefaultPathReportsMissingHomeDir(t *testing.T) {
 
 	if !errors.Is(err, homeErr) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestMissingSettingErrorShowsExampleFile(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope.toml")
+
+	_, err := Load(missing, env(nil))
+
+	for _, want := range []string{missing, EnvAPIKey, `api_key = "sp_..."`} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("error should contain %q, got %v", want, err)
+		}
 	}
 }
