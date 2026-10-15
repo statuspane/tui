@@ -13,6 +13,8 @@ import (
 const (
 	EnvAPIKey  = "STATUSPANE_API_KEY"
 	EnvBaseURL = "STATUSPANE_URL"
+
+	DefaultBaseURL = "https://statuspane.io"
 )
 
 type Config struct {
@@ -34,23 +36,30 @@ func DefaultPath(getenv func(string) string, userHomeDir func() (string, error))
 }
 
 // Load reads the file at path (a missing file is fine), lets the environment override it,
-// and fails when the API key or base URL is still unset.
+// and fails when the API key is still unset. The base URL defaults to DefaultBaseURL.
 func Load(path string, getenv func(string) string) (Config, error) {
-	var cfg Config
+	cfg := Config{BaseURL: DefaultBaseURL}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return Config{}, fmt.Errorf("reading %s: %w", path, err)
 	}
-	if v := getenv(EnvAPIKey); v != "" {
-		cfg.APIKey = v
+	if apiKey := getenv(EnvAPIKey); apiKey != "" {
+		cfg.APIKey = apiKey
 	}
-	if v := getenv(EnvBaseURL); v != "" {
-		cfg.BaseURL = v
+	if baseURL := getenv(EnvBaseURL); baseURL != "" {
+		cfg.BaseURL = baseURL
 	}
 	if cfg.APIKey == "" {
-		return Config{}, fmt.Errorf("no API key configured: set %s or api_key in %s", EnvAPIKey, path)
-	}
-	if cfg.BaseURL == "" {
-		return Config{}, fmt.Errorf("no base URL configured: set %s or base_url in %s", EnvBaseURL, path)
+		return Config{}, missingAPIKeyError(path)
 	}
 	return cfg, nil
+}
+
+// missingAPIKeyError shows a complete example, since a first run usually lacks the whole file.
+func missingAPIKeyError(path string) error {
+	return fmt.Errorf(`no API key configured
+
+Set %s, or create %s containing:
+
+  api_key = "sp_..."   # an organization API key
+`, EnvAPIKey, path)
 }
