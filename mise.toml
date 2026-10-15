@@ -24,8 +24,12 @@ description = "Fail if go.mod or go.sum need `go mod tidy`"
 run = "go mod tidy -diff"
 
 [tasks.build]
-description = "Build the binary and vet the code"
-run = ["go vet ./...", "go build -o statuspane ./cmd/statuspane-tui"]
+description = "Vet, then build a production ./statuspane-tui (static, stripped, version from git)"
+env = { CGO_ENABLED = "0" }
+run = [
+  "go vet ./...",
+  "go build -trimpath -ldflags \"-s -w -X main.version=$(git describe --tags --always --dirty)\" -o statuspane-tui ./cmd/statuspane-tui",
+]
 
 [tasks.ci]
 description = "Run every check CI runs, in order"
