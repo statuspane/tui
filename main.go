@@ -32,6 +32,6 @@ func run() error {
 	}
 
 	client := api.NewClient(cfg.BaseURL, cfg.APIKey, version)
-	_, err = tea.NewProgram(ui.NewAppsModel(client)).Run()
+	_, err = tea.NewProgram(ui.NewRootModel(client)).Run()
 	return err
 }

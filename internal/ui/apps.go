@@ -31,6 +31,9 @@ type AppLister interface {
 	ListApps(ctx context.Context) ([]api.App, error)
 }
 
+// openAppMsg asks the root model to show one app's detail screen.
+type openAppMsg struct{ slug, name string }
+
 type appsLoadedMsg struct{ apps []api.App }
 
 type appsFailedMsg struct{ err error }
@@ -94,6 +97,12 @@ func (m AppsModel) handleKey(keyPress tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.selectedIndex = max(m.selectedIndex-1, 0)
 	case "down", "j":
 		m.selectedIndex = min(m.selectedIndex+1, max(len(m.apps)-1, 0))
+	case "enter":
+		if len(m.apps) == 0 {
+			return m, nil
+		}
+		app := m.apps[m.selectedIndex]
+		return m, func() tea.Msg { return openAppMsg{slug: app.Slug, name: app.Name} }
 	case "r":
 		if m.isLoading {
 			return m, nil
@@ -125,7 +134,7 @@ func (m AppsModel) View() tea.View {
 	screen := titleStyle.Render("StatusPane") + "\n\n" +
 		m.body() +
 		m.statusLines() +
-		"\n" + mutedStyle.Render("↑/↓ move · r refresh · q quit") + "\n"
+		"\n" + mutedStyle.Render("↑/↓ move · enter open · r refresh · q quit") + "\n"
 	return tea.NewView(screen)
 }
 
