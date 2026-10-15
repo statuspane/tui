@@ -1,0 +1,33 @@
+name: Slice of work
+description: One vertical slice: small enough for one branch and one PR
+labels: []
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: What should exist or behave differently when this is done?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The problem or need this addresses.
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: Observable outcomes, as a checklist. Include what is verified how.
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this deliberately leaves for another slice.
+    validations:
+      required: false
