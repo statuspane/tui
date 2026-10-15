@@ -10,7 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/matiasleidemer/statuspane-tui/internal/api"
+	"github.com/statuspane/tui/internal/api"
 )
 
 var detailNow = time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)

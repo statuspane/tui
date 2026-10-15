@@ -1,4 +1,4 @@
-module github.com/matiasleidemer/statuspane-tui
+module github.com/statuspane/tui
 
 go 1.27.2
 

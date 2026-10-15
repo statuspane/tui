@@ -8,7 +8,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/matiasleidemer/statuspane-tui/internal/api"
+	"github.com/statuspane/tui/internal/api"
 )
 
 const (

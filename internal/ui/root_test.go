@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/matiasleidemer/statuspane-tui/internal/api"
+	"github.com/statuspane/tui/internal/api"
 )
 
 type fakeBackend struct {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/matiasleidemer/statuspane-tui/internal/api"
+	"github.com/statuspane/tui/internal/api"
 )
 
 const (

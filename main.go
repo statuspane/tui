@@ -6,9 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/matiasleidemer/statuspane-tui/internal/api"
-	"github.com/matiasleidemer/statuspane-tui/internal/config"
-	"github.com/matiasleidemer/statuspane-tui/internal/ui"
+	"github.com/statuspane/tui/internal/api"
+	"github.com/statuspane/tui/internal/config"
+	"github.com/statuspane/tui/internal/ui"
 )
 
 // Overridden at release time with -ldflags "-X main.version=...".
