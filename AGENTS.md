@@ -7,7 +7,8 @@ organization API key and uses only what the public API exposes.
 
 ## Stack
 
-- Go (version pinned in `mise.toml`), one module `github.com/statuspane/tui`, a single binary
+- Go (version pinned in `mise.toml`), one module `github.com/statuspane/tui`, one binary `statuspane-tui` built from
+  `cmd/statuspane-tui` (the path is what names it under `go install`)
 - Bubble Tea v2 (model/update/view), Lip Gloss v2, `charm.land/bubbles/v2`
 - Standard library for HTTP, JSON and tests; `BurntSushi/toml` for the config file
 - golangci-lint v2 (curated set in `.golangci.yml`), govulncheck, GitHub Actions

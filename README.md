@@ -12,7 +12,13 @@ Go and the dev tools are pinned in `mise.toml`.
 
 ```sh
 mise install
-mise run build      # vets, then builds ./statuspane
+mise run build      # vets, then builds ./statuspane-tui
+```
+
+Or install it straight from Go:
+
+```sh
+go install github.com/statuspane/tui/cmd/statuspane-tui@latest
 ```
 
 ## Configure
@@ -35,7 +41,7 @@ in the file, for example to use a local server. Environment variables win over t
 ## Run
 
 ```sh
-./statuspane
+./statuspane-tui
 ```
 
 `↑/↓` move, `enter` opens an app, `esc` goes back, `r` refreshes, `q` quits.
@@ -51,7 +57,7 @@ mise run fmt        # format (gofmt + goimports)
 `mise tasks` lists the rest. CI runs the same tasks on every pull request.
 
 ```
-main.go             wires config, API client and UI together
+cmd/statuspane-tui  the binary: wires config, API client and UI together
 internal/config    API key and server URL from env or file
 internal/api       client for the StatusPane public API
 internal/ui        Bubble Tea screens
