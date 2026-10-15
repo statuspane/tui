@@ -25,7 +25,7 @@ run = "go mod tidy -diff"
 
 [tasks.build]
 description = "Build the binary and vet the code"
-run = ["go vet ./...", "go build -o statuspane ."]
+run = ["go vet ./...", "go build -o statuspane ./cmd/statuspane-tui"]
 
 [tasks.ci]
 description = "Run every check CI runs, in order"
