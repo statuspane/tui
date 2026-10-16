@@ -146,3 +146,35 @@ func TestCancelledContextStopsRequest(t *testing.T) {
 		t.Fatalf("want context.Canceled, got %v", err)
 	}
 }
+
+func TestValidationFailedCarriesFieldDetails(t *testing.T) {
+	c := newTestClient(t, jsonHandler(http.StatusBadRequest, `{"error":{"code":"validation_failed","message":"Invalid.","details":[
+		{"field":"name","code":"too_long","message":"Name is too long"},
+		{"field":"watched_components[1]","code":"unknown_component","message":"No component github/nope"}
+	]}}`))
+
+	_, err := c.ListApps(context.Background())
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Code != CodeValidationFailed || len(apiErr.Details) != 2 {
+		t.Fatalf("got %v", err)
+	}
+	if got := apiErr.Details[1]; got.Field != "watched_components[1]" || got.Code != "unknown_component" {
+		t.Fatalf("details[1] = %+v", got)
+	}
+}
+
+func TestReadsSendNoContentType(t *testing.T) {
+	var contentType string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
+		writeJSON(w, http.StatusOK, `[]`)
+	})
+
+	if _, err := c.ListApps(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if contentType != "" {
+		t.Fatalf("Content-Type = %q, want none", contentType)
+	}
+}
