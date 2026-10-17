@@ -156,47 +156,46 @@ func (m WatchPickerModel) componentLines() []string {
 // componentRows draws the ordered components under their group headings, scrolled so the row
 // under the cursor is in view; the headings take rows like any other line.
 func (m WatchPickerModel) componentRows(ordered []api.Component) []string {
-	lines := groupLines(ordered, func(component api.Component) bool { return m.selection.isChosen(keyOf(component)) })
+	lines := linesWithHeadings(ordered, m.selection)
 	nameWidth, statusWidth := columnWidths(ordered)
-	start, end := visibleRange(len(lines), lineOfComponent(lines, m.componentIndex), m.visibleRowCount())
+	cursorLine, _ := lineOfComponent(lines, m.componentIndex) // no cursor line: show the top
+	start, end := visibleRange(len(lines), cursorLine, m.visibleRowCount())
 	rows := make([]string, 0, end-start)
 	for _, line := range lines[start:end] {
 		if line.isHeading {
 			rows = append(rows, headingRow(line))
 			continue
 		}
-		rows = append(rows, m.componentRow(ordered[line.componentIndex], line.componentIndex == m.componentIndex, nameWidth, statusWidth))
+		rows = append(rows, m.componentRow(ordered[line.index], line.index == m.componentIndex, nameWidth, statusWidth))
 	}
 	return rows
 }
 
-// lineOfComponent is the position among the lines of the component at index.
-func lineOfComponent(lines []componentLine, index int) int {
-	for position, line := range lines {
-		if !line.isHeading && line.componentIndex == index {
-			return position
-		}
-	}
-	return 0
-}
-
-func headingRow(line componentLine) string {
+func headingRow(line paneLine) string {
 	return noSelectionMarker + titleStyle.Render(line.groupName) + columnGap +
-		mutedStyle.Render(fmt.Sprintf("%d/%d watched", line.chosen, line.total))
+		mutedStyle.Render(fmt.Sprintf("%d/%d watched", line.watched, line.total))
 }
 
-// componentRow is one component. The row under the cursor is a bar across the whole row, drawn
-// from plain text because styles nested inside a bar would end it early. The other rows show
-// their state in the marker and across the name.
 func (m WatchPickerModel) componentRow(component api.Component, isCursor bool, nameWidth, statusWidth int) string {
 	state := m.selection.stateOf(keyOf(component))
 	padding := strings.Repeat(" ", max(nameWidth-lipgloss.Width(component.Name), 0))
 	if isCursor && m.focusedPane == componentsPane {
-		status := fmt.Sprintf("%-*s", statusWidth, statusLabel(component.Status))
-		return cursorRowStyle.Render(selectionMarker + markerText(state) + " " + component.Name + padding + columnGap + status)
+		return cursorRow(component, state, padding, statusWidth)
 	}
-	// The padding stays outside the style: a strikethrough would run through it.
-	return noSelectionMarker + watchMarker(state) + " " + nameStyleFor(state).Render(component.Name) + padding + columnGap + renderStatus(component.Status, statusWidth)
+	return stateRow(component, state, padding, statusWidth)
+}
+
+// cursorRow is a bar across the whole row, drawn from plain text because styles nested inside a
+// bar would end it early.
+func cursorRow(component api.Component, state watchState, padding string, statusWidth int) string {
+	status := fmt.Sprintf("%-*s", statusWidth, statusLabel(component.Status))
+	return cursorRowStyle.Render(selectionMarker + markerText(state) + " " + component.Name + padding + columnGap + status)
+}
+
+// stateRow shows the state of the component in its marker and across its name. The padding stays
+// outside the name's style: a strikethrough would run through it.
+func stateRow(component api.Component, state watchState, padding string, statusWidth int) string {
+	return noSelectionMarker + styledMarker(state) + " " + nameStyleFor(state).Render(component.Name) + padding + columnGap + renderStatus(component.Status, statusWidth)
 }
 
 // markerText is how a state reads without colour: watched, to be added, to be removed, not watched.
@@ -212,36 +211,8 @@ func markerText(state watchState) string {
 	return "[ ]"
 }
 
-// watchMarker is the marker in its state's colour.
-func watchMarker(state watchState) string {
+func styledMarker(state watchState) string {
 	return markerStyleFor(state).Render(markerText(state))
-}
-
-func markerStyleFor(state watchState) lipgloss.Style {
-	switch state {
-	case stateWatched:
-		return lipgloss.NewStyle().Foreground(colorGreen)
-	case stateAdded:
-		return lipgloss.NewStyle().Foreground(colorBlue)
-	case stateRemoved:
-		return lipgloss.NewStyle().Foreground(colorRed)
-	}
-	return mutedStyle
-}
-
-// nameStyleFor makes the chosen components easy to spot in a long list: watched in green, to be
-// added in bold blue, to be removed in red and struck through; a component that is not watched
-// stays plain.
-func nameStyleFor(state watchState) lipgloss.Style {
-	switch state {
-	case stateWatched:
-		return lipgloss.NewStyle().Foreground(colorGreen)
-	case stateAdded:
-		return lipgloss.NewStyle().Foreground(colorBlue).Bold(true)
-	case stateRemoved:
-		return lipgloss.NewStyle().Foreground(colorRed).Strikethrough(true)
-	}
-	return lipgloss.NewStyle()
 }
 
 func columnWidths(components []api.Component) (nameWidth, statusWidth int) {

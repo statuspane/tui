@@ -103,3 +103,21 @@ func TestWithChosenLeavesTheOriginalSelectionAlone(t *testing.T) {
 		t.Fatal("withChosen must return a new selection")
 	}
 }
+
+func TestToggledAllChoosesTheRestAndThenUnchoosesEverything(t *testing.T) {
+	api1, git := component("github", "api"), component("github", "git")
+	selection := newWatchSelection([]api.Component{api1})
+
+	all := selection.toggledAll([]api.Component{api1, git})
+	if all.chosenAmong([]api.Component{api1, git}) != 2 || all.stateOf(keyOf(git)) != stateAdded {
+		t.Fatalf("not every component was chosen: %+v", all.chosen)
+	}
+	none := all.toggledAll([]api.Component{api1, git})
+
+	if none.chosenAmong([]api.Component{api1, git}) != 0 || none.stateOf(keyOf(api1)) != stateRemoved {
+		t.Fatalf("not every component was unchosen: %+v", none.chosen)
+	}
+	if selection.isChosen(keyOf(git)) {
+		t.Fatal("toggledAll must return a new selection")
+	}
+}

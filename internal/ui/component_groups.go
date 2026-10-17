@@ -1,7 +1,8 @@
 package ui
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 
 	"github.com/statuspane/tui/internal/api"
@@ -21,23 +22,24 @@ func groupNameOf(component api.Component) string {
 // ignoring case, components without a group last, and the order inside a group as given. The
 // input is not modified.
 func orderedByGroup(components []api.Component) []api.Component {
-	ordered := append([]api.Component(nil), components...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		first, second := groupNameOf(ordered[i]), groupNameOf(ordered[j])
-		switch {
-		case first == second:
-			return false
-		case first == "":
-			return false
-		case second == "":
-			return true
-		}
-		if folded := strings.Compare(strings.ToLower(first), strings.ToLower(second)); folded != 0 {
-			return folded < 0
-		}
-		return first < second
+	ordered := slices.Clone(components)
+	slices.SortStableFunc(ordered, func(a, b api.Component) int {
+		groupA, groupB := groupNameOf(a), groupNameOf(b)
+		return cmp.Or(
+			cmp.Compare(ungroupedRank(groupA), ungroupedRank(groupB)),
+			strings.Compare(strings.ToLower(groupA), strings.ToLower(groupB)),
+			strings.Compare(groupA, groupB),
+		)
 	})
 	return ordered
+}
+
+// ungroupedRank sorts components without a group after the ones with.
+func ungroupedRank(group string) int {
+	if group == "" {
+		return 1
+	}
+	return 0
 }
 
 // groupBounds is the range [start, end) of the ordered components that share the group of the one
@@ -54,52 +56,51 @@ func groupBounds(ordered []api.Component, index int) (start, end int) {
 	return start, end
 }
 
-// componentLine is one line of the components pane: a group heading with its progress, or a
+// paneLine is one line of the components pane: a group heading with its progress, or a
 // component, by its index in the ordered list.
-type componentLine struct {
-	isHeading      bool
-	groupName      string
-	chosen         int
-	total          int
-	componentIndex int
+type paneLine struct {
+	isHeading bool
+	groupName string
+	watched   int // components of the group that are watched or about to be
+	total     int
+	index     int
 }
 
-// groupLines lays ordered components out under group headings. A provider none of whose
-// components has a group gets no headings at all. isChosen says whether a component is chosen,
-// for the progress shown on each heading.
-func groupLines(ordered []api.Component, isChosen func(api.Component) bool) []componentLine {
-	hasGroups := false
-	for _, component := range ordered {
-		if groupNameOf(component) != "" {
-			hasGroups = true
-			break
-		}
-	}
+// linesWithHeadings lays ordered components out under group headings. A provider none of whose
+// components has a group gets no headings at all.
+func linesWithHeadings(ordered []api.Component, selection watchSelection) []paneLine {
+	hasGroups := slices.ContainsFunc(ordered, func(component api.Component) bool { return groupNameOf(component) != "" })
 
-	lines := make([]componentLine, 0, len(ordered))
-	previousGroup := ""
-	for index, component := range ordered {
-		group := groupNameOf(component)
-		if hasGroups && (index == 0 || group != previousGroup) {
-			lines = append(lines, headingFor(ordered, index, isChosen))
+	lines := make([]paneLine, 0, len(ordered))
+	for start := 0; start < len(ordered); {
+		_, end := groupBounds(ordered, start)
+		if hasGroups {
+			lines = append(lines, headingFor(ordered[start:end], selection))
 		}
-		lines = append(lines, componentLine{componentIndex: index})
-		previousGroup = group
+		for index := start; index < end; index++ {
+			lines = append(lines, paneLine{index: index})
+		}
+		start = end
 	}
 	return lines
 }
 
-func headingFor(ordered []api.Component, index int, isChosen func(api.Component) bool) componentLine {
-	start, end := groupBounds(ordered, index)
-	chosen := 0
-	for _, member := range ordered[start:end] {
-		if isChosen(member) {
-			chosen++
-		}
-	}
-	name := groupNameOf(ordered[index])
+// headingFor is the heading of a group, given all of its members.
+func headingFor(members []api.Component, selection watchSelection) paneLine {
+	name := groupNameOf(members[0])
 	if name == "" {
 		name = ungroupedLabel
 	}
-	return componentLine{isHeading: true, groupName: name, chosen: chosen, total: end - start}
+	return paneLine{isHeading: true, groupName: name, watched: selection.chosenAmong(members), total: len(members)}
+}
+
+// lineOfComponent is the position among the lines of the component at index; found is false when
+// there is no such component.
+func lineOfComponent(lines []paneLine, index int) (position int, found bool) {
+	for position, line := range lines {
+		if !line.isHeading && line.index == index {
+			return position, true
+		}
+	}
+	return 0, false
 }

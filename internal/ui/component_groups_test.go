@@ -35,6 +35,16 @@ func TestOrderedByGroupSortsGroupsIgnoringCaseWithUngroupedLastAndKeepsTheOrderI
 	}
 }
 
+func TestOrderedByGroupKeepsGroupsThatDifferOnlyByCaseApartAndStable(t *testing.T) {
+	components := []api.Component{inGroup("lower1", "core"), inGroup("upper1", "Core"), inGroup("lower2", "core")}
+
+	got := ids(orderedByGroup(components))
+
+	if !reflect.DeepEqual(got, []string{"upper1", "lower1", "lower2"}) {
+		t.Fatalf("got %v", got)
+	}
+}
+
 func TestOrderedByGroupTreatsAnEmptyGroupNameAsNoGroup(t *testing.T) {
 	components := []api.Component{inGroup("empty", ""), namedComponent("github", "blank", "blank", stringPtr("")), inGroup("grouped", "Core")}
 
@@ -68,35 +78,56 @@ func TestGroupBoundsIsTheRunOfTheSameGroup(t *testing.T) {
 	}
 }
 
-func TestGroupLinesPutAHeadingWithProgressBeforeEachGroup(t *testing.T) {
+func TestLinesWithHeadingsPutAHeadingWithProgressBeforeEachGroup(t *testing.T) {
 	ordered := orderedByGroup([]api.Component{inGroup("a1", "A"), inGroup("a2", "A"), inGroup("loose", "")})
-	chosen := func(component api.Component) bool { return component.ID == "a2" }
+	selection := newWatchSelection([]api.Component{inGroup("a2", "A")})
 
-	lines := groupLines(ordered, chosen)
+	lines := linesWithHeadings(ordered, selection)
 
-	want := []componentLine{
-		{isHeading: true, groupName: "A", chosen: 1, total: 2},
-		{componentIndex: 0}, {componentIndex: 1},
-		{isHeading: true, groupName: ungroupedLabel, chosen: 0, total: 1},
-		{componentIndex: 2},
+	want := []paneLine{
+		{isHeading: true, groupName: "A", watched: 1, total: 2},
+		{index: 0}, {index: 1},
+		{isHeading: true, groupName: ungroupedLabel, watched: 0, total: 1},
+		{index: 2},
 	}
 	if !reflect.DeepEqual(lines, want) {
 		t.Fatalf("got %+v\nwant %+v", lines, want)
 	}
 }
 
-func TestGroupLinesHaveNoHeadingsWhenNothingHasAGroup(t *testing.T) {
-	ordered := []api.Component{inGroup("x", ""), inGroup("y", "")}
+func TestLinesWithHeadingsStartWithAnUngroupedHeadingWhenOnlySomeHaveAGroup(t *testing.T) {
+	ordered := []api.Component{inGroup("loose", ""), inGroup("a1", "A")}
 
-	lines := groupLines(ordered, func(api.Component) bool { return false })
+	lines := linesWithHeadings(ordered, newWatchSelection(nil))
 
-	if !reflect.DeepEqual(lines, []componentLine{{componentIndex: 0}, {componentIndex: 1}}) {
+	if len(lines) != 4 || !lines[0].isHeading || lines[0].groupName != ungroupedLabel || !lines[2].isHeading || lines[2].groupName != "A" {
 		t.Fatalf("got %+v", lines)
 	}
 }
 
-func TestGroupLinesOfNothingAreEmpty(t *testing.T) {
-	if lines := groupLines(nil, func(api.Component) bool { return false }); len(lines) != 0 {
+func TestLinesWithHeadingsHaveNoHeadingsWhenNothingHasAGroup(t *testing.T) {
+	ordered := []api.Component{inGroup("x", ""), inGroup("y", "")}
+
+	lines := linesWithHeadings(ordered, newWatchSelection(nil))
+
+	if !reflect.DeepEqual(lines, []paneLine{{index: 0}, {index: 1}}) {
 		t.Fatalf("got %+v", lines)
+	}
+}
+
+func TestLinesWithHeadingsOfNothingAreEmpty(t *testing.T) {
+	if lines := linesWithHeadings(nil, newWatchSelection(nil)); len(lines) != 0 {
+		t.Fatalf("got %+v", lines)
+	}
+}
+
+func TestLineOfComponentSkipsHeadingsAndSaysWhenThereIsNoSuchComponent(t *testing.T) {
+	lines := linesWithHeadings(orderedByGroup([]api.Component{inGroup("a1", "A"), inGroup("b1", "B")}), newWatchSelection(nil))
+
+	if position, found := lineOfComponent(lines, 1); !found || position != 3 {
+		t.Errorf("got %d, %v, want 3, true", position, found)
+	}
+	if _, found := lineOfComponent(lines, 5); found {
+		t.Error("a component that does not exist was found")
 	}
 }

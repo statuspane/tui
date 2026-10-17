@@ -232,37 +232,35 @@ func (m WatchPickerModel) refresh() (WatchPickerModel, tea.Cmd) {
 	return m, fetchProviderComponents(m.backend, providerSlug)
 }
 
-func (m WatchPickerModel) toggleComponentAtCursor() WatchPickerModel {
+// componentsAtCursor are the visible components when the cursor is on one of them in the
+// components pane; ok is false otherwise.
+func (m WatchPickerModel) componentsAtCursor() (components []api.Component, ok bool) {
 	if m.focusedPane != componentsPane {
-		return m
+		return nil, false
 	}
-	components := m.visibleComponents()
-	if m.componentIndex >= len(components) {
+	components = m.visibleComponents()
+	return components, m.componentIndex < len(components)
+}
+
+func (m WatchPickerModel) toggleComponentAtCursor() WatchPickerModel {
+	components, ok := m.componentsAtCursor()
+	if !ok {
 		return m
 	}
 	m.selection = m.selection.toggled(keyOf(components[m.componentIndex]))
 	return m
 }
 
-// toggleGroupAtCursor chooses the rest of the visible components of the group under the cursor,
-// or, when they are all chosen already, unchooses them all. Components a filter hides are left
+// toggleGroupAtCursor watches the rest of the visible components of the group under the cursor
+// or, when they are all chosen already, unwatches them all. Components a filter hides are left
 // alone: the user never changes what cannot be seen.
 func (m WatchPickerModel) toggleGroupAtCursor() WatchPickerModel {
-	if m.focusedPane != componentsPane {
-		return m
-	}
-	components := m.visibleComponents()
-	if m.componentIndex >= len(components) {
+	components, ok := m.componentsAtCursor()
+	if !ok {
 		return m
 	}
 	start, end := groupBounds(components, m.componentIndex)
-	keys := make([]componentKey, 0, end-start)
-	allChosen := true
-	for _, component := range components[start:end] {
-		keys = append(keys, keyOf(component))
-		allChosen = allChosen && m.selection.isChosen(keyOf(component))
-	}
-	m.selection = m.selection.withChosen(keys, !allChosen)
+	m.selection = m.selection.toggledAll(components[start:end])
 	return m
 }
 

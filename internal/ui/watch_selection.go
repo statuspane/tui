@@ -78,6 +78,27 @@ func (s watchSelection) withChosen(keys []componentKey, chosen bool) watchSelect
 	return watchSelection{baseline: s.baseline, chosen: next}
 }
 
+// chosenAmong counts the components that are chosen.
+func (s watchSelection) chosenAmong(components []api.Component) int {
+	count := 0
+	for _, component := range components {
+		if s.chosen[keyOf(component)] {
+			count++
+		}
+	}
+	return count
+}
+
+// toggledAll chooses the components that are not chosen yet or, when they all are, unchooses them
+// all; s is left as it was.
+func (s watchSelection) toggledAll(components []api.Component) watchSelection {
+	keys := make([]componentKey, 0, len(components))
+	for _, component := range components {
+		keys = append(keys, keyOf(component))
+	}
+	return s.withChosen(keys, s.chosenAmong(components) < len(components))
+}
+
 func (s watchSelection) stateOf(key componentKey) watchState {
 	wasWatched, isChosen := s.baseline[key], s.chosen[key]
 	switch {

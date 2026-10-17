@@ -51,7 +51,7 @@ detail, or a dialog (`createAppDialog`, `deleteAppDialog`) instead of any of the
 - Components are shown under group headings, but the list the cursor, `space`, `g`, the filter
   and the save work on stays flat: `visibleComponents()` is the filtered list put in group order
   by `orderedByGroup` (groups alphabetical, no group last, API order inside a group), and the
-  headings are only drawn by `groupLines`, which has no say in what the cursor can reach. A
+  headings are only drawn by `linesWithHeadings`, which has no say in what the cursor can reach. A
   provider where nothing has a group gets no headings. `g` acts on the visible members of the
   group (`groupBounds`), never on components a filter hides. Never sort or reorder the cached
   slice: `filterComponents` can hand back the cache's own slice, and `orderedByGroup` copies it.

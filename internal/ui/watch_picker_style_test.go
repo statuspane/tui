@@ -8,12 +8,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// rawRow is the line of a view, colour codes included, that shows the text. It reads the text
-// without the codes, because strikethrough is applied to each character on its own.
+// rawRow is the component row of a view, colour codes included, that shows the text. It reads the
+// text without the codes, because strikethrough is applied to each character on its own.
 func rawRow(t *testing.T, view, text string) string {
 	t.Helper()
 	for _, line := range strings.Split(view, "\n") {
-		if strings.Contains(plain(t, line), text) {
+		if strings.Contains(plain(t, line), "] "+text) {
 			return line
 		}
 	}
@@ -91,6 +91,23 @@ func TestTheRowUnderTheCursorIsABarAcrossTheWholeRow(t *testing.T) {
 	}
 	if got := len(reverseVideo.FindAllString(m.View().Content, -1)); got != 1 {
 		t.Fatalf("%d reverse-video runs, want exactly the cursor row's", got)
+	}
+}
+
+func TestTheBarShowsTheStateOfTheRowInPlainText(t *testing.T) {
+	// API Requests watched, Git Operations added, Webhooks removed, Pages not watched.
+	cases := []struct {
+		presses int
+		row     string
+	}{{0, "▸ [x] API Requests"}, {1, "▸ [+] Git Operations"}, {2, "▸ [-] Webhooks"}, {3, "▸ [ ] Pages"}}
+	m := chosenRowsPicker()
+	m = pressTimes(m, keyK, 3) // back on API Requests
+
+	for _, tc := range cases {
+		view := pressTimes(m, keyJ, tc.presses).View().Content
+		if !strings.Contains(plain(t, view), tc.row) || len(reverseVideo.FindAllString(view, -1)) != 1 {
+			t.Errorf("want one bar on %q:\n%q", tc.row, view)
+		}
 	}
 }
 

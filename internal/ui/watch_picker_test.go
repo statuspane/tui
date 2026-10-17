@@ -1092,13 +1092,14 @@ func pressTimes(m WatchPickerModel, key tea.KeyPressMsg, times int) WatchPickerM
 func TestComponentsAreListedUnderGroupHeadingsWithTheUngroupedLast(t *testing.T) {
 	view := plain(t, groupedPicker().View().Content)
 
-	assertViewContains(t, view, "Core  0/2 watched", "Developer  0/1 watched", "Ungrouped  0/1 watched")
-	core, developer, ungrouped := strings.Index(view, "Core  0/2"), strings.Index(view, "Developer  0/1"), strings.Index(view, "Ungrouped  0/1")
-	if core >= developer || developer >= ungrouped {
-		t.Fatalf("headings out of order (%d, %d, %d):\n%s", core, developer, ungrouped, view)
-	}
-	if strings.Index(view, "API Requests") > developer || strings.Index(view, "Pages") < ungrouped {
-		t.Fatalf("components are not under their headings:\n%s", view)
+	want := []string{"Core  0/2 watched", "API Requests", "Git Operations", "Developer  0/1 watched", "Webhooks", "Ungrouped  0/1 watched", "Pages"}
+	position := 0
+	for _, text := range want {
+		found := strings.Index(view[position:], text)
+		if found < 0 {
+			t.Fatalf("%q is missing or out of order:\n%s", text, view)
+		}
+		position += found + len(text)
 	}
 }
 
@@ -1110,10 +1111,17 @@ func TestAProviderWithoutGroupsHasNoHeadings(t *testing.T) {
 }
 
 func TestARowDoesNotRepeatItsGroupNameTheHeadingSaysIt(t *testing.T) {
+	rowsSeen := 0
 	for _, line := range strings.Split(plain(t, groupedPicker().View().Content), "\n") {
-		if strings.Contains(line, "API Requests") && strings.Contains(line, "Core") {
-			t.Fatalf("a component row carries its group: %q", line)
+		if strings.Contains(line, "API Requests") {
+			rowsSeen++
+			if strings.Contains(line, "Core") {
+				t.Fatalf("a component row carries its group: %q", line)
+			}
 		}
+	}
+	if rowsSeen != 1 {
+		t.Fatalf("saw %d rows for API Requests, want 1", rowsSeen)
 	}
 }
 
@@ -1178,6 +1186,58 @@ func TestGActsOnlyOnTheComponentsAFilterLetsThrough(t *testing.T) {
 	m, _ = m.Update(keyEscape)
 
 	assertViewContains(t, m.View().Content, "[+] Git Operations", "[ ] API Requests", "Core  1/2 watched")
+}
+
+func TestGKeepsAChosenComponentAFilterHidesAndSavesIt(t *testing.T) {
+	var saved [][]api.ComponentRef
+	backend := fakePickerBackend{fakeProviderCatalog: groupedCatalog(), fakeWatchedComponentsSetter: fakeWatchedComponentsSetter{saved: &saved}}
+	m := pickerOnComponents(backend, component("github", "api"))
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "oper") // Git Operations only; the watched API Requests is hidden
+	m, _ = m.Update(keyEnter)
+
+	m, _ = m.Update(keyG) // chooses Git Operations, because the visible members are not all chosen
+	m, _ = m.Update(keyG) // all visible members are chosen now, so this unchooses them
+	m, _ = m.Update(keyG)
+	_, cmd := m.Update(keyS)
+	cmd()
+
+	want := []api.ComponentRef{{Provider: "github", ID: "api"}, {Provider: "github", ID: "git"}}
+	if len(saved) != 1 || !reflect.DeepEqual(saved[0], want) {
+		t.Fatalf("saved = %+v, want %+v: the hidden watched component must stay", saved, want)
+	}
+}
+
+func TestGChoosesAGroupWhoseWatchedComponentWasUnwatched(t *testing.T) {
+	m := groupedPicker(component("github", "api"), component("github", "git"))
+	m, _ = m.Update(keySpace) // API Requests is to be removed
+
+	m, _ = m.Update(keyG)
+
+	assertViewContains(t, m.View().Content, "[x] API Requests", "[x] Git Operations", "Core  2/2 watched")
+	assertViewLacks(t, m.View().Content, "not saved yet")
+}
+
+func TestGWorksFromTheFirstAndTheLastComponentOfAGroup(t *testing.T) {
+	first, _ := groupedPicker().Update(keyG)
+	last, _ := pressTimes(groupedPicker(), keyJ, 1).Update(keyG)
+
+	for _, m := range []WatchPickerModel{first, last} {
+		assertViewContains(t, m.View().Content, "[+] API Requests", "[+] Git Operations", "Core  2/2 watched")
+	}
+}
+
+func TestGIsIgnoredWhileASaveIsInFlight(t *testing.T) {
+	m := groupedPicker()
+	m, _ = m.Update(keySpace)
+	m, _ = m.Update(keyS)
+	before := m.View().Content
+
+	m, cmd := m.Update(keyG)
+
+	if cmd != nil || m.View().Content != before {
+		t.Fatal("g changed the selection while saving")
+	}
 }
 
 func TestGDoesNothingOutsideTheComponentsPane(t *testing.T) {
