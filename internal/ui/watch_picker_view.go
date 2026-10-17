@@ -52,10 +52,13 @@ func changesText(count int) string {
 }
 
 func (m WatchPickerModel) helpText() string {
-	if m.isSearching {
-		return "⏎ search · esc clear"
+	switch {
+	case m.providersFilter.active || m.componentsFilter.active:
+		return filteringHelpText
+	case m.focusedPane == providersPane:
+		return "↑/↓ move · tab switch pane · / filter providers · r refresh · s save · esc cancel"
 	}
-	return "↑/↓ move · tab switch pane · space watch or unwatch · / search · r refresh · s save · esc cancel"
+	return "↑/↓ move · tab switch pane · space watch or unwatch · / filter components · r refresh · s save · esc cancel"
 }
 
 func (m WatchPickerModel) visibleRowCount() int {
@@ -63,13 +66,14 @@ func (m WatchPickerModel) visibleRowCount() int {
 }
 
 func (m WatchPickerModel) providersView() string {
-	// The blank line keeps the rows level with the components, which have a search line above them.
-	lines := []string{paneTitle("Providers", m.focusedPane == providersPane), ""}
+	lines := []string{paneTitle("Providers", m.focusedPane == providersPane), m.providersFilter.line("/ to filter providers")}
 	switch {
 	case m.providersErr != nil:
 		lines = append(lines, errorStyle.Render(errorMessage(m.providersErr)))
 	case !m.providersLoaded:
 		lines = append(lines, loadingText)
+	case len(m.visibleProviders()) == 0:
+		lines = append(lines, "No providers match.")
 	default:
 		lines = append(lines, m.providerRows()...)
 	}
@@ -104,10 +108,11 @@ func (m WatchPickerModel) watchedText(provider api.Provider) string {
 
 func (m WatchPickerModel) providerRows() []string {
 	nameWidth := m.providerNameWidth()
-	start, end := visibleRange(len(m.providers), m.providerIndex, m.visibleRowCount())
+	providers := m.visibleProviders()
+	start, end := visibleRange(len(providers), m.providerIndex, m.visibleRowCount())
 	rows := make([]string, 0, end-start)
 	for index := start; index < end; index++ {
-		provider := m.providers[index]
+		provider := providers[index]
 		marker, name := noSelectionMarker, fmt.Sprintf("%-*s", nameWidth, provider.Name)
 		if index == m.providerIndex {
 			marker, name = selectionMarker, selectedStyle.Render(name)
@@ -122,48 +127,33 @@ func (m WatchPickerModel) componentsView() string {
 	if !ok {
 		return paneTitle("Components", m.focusedPane == componentsPane)
 	}
-	lines := []string{paneTitle(provider.Name+" components", m.focusedPane == componentsPane), m.searchLine()}
-	if placeholder, isPlaceholder := m.componentsPlaceholder(); isPlaceholder {
-		lines = append(lines, placeholder...)
-	} else {
-		lines = append(lines, m.componentRows()...)
+	lines := []string{
+		paneTitle(provider.Name+" components", m.focusedPane == componentsPane),
+		m.componentsFilter.line("/ to filter by name or group"),
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(append(lines, m.componentLines()...), "\n")
 }
 
-func (m WatchPickerModel) searchLine() string {
-	switch {
-	case m.isSearching:
-		return m.search.View()
-	case m.query != "":
-		return mutedStyle.Render("Search: " + m.query + "  (/ to change, esc inside to clear)")
+// componentLines are the rows to draw under the filter line, or, when there are none, why.
+func (m WatchPickerModel) componentLines() []string {
+	providerSlug, _ := m.providerSlugAtCursor()
+	if err := m.cache.failure(providerSlug); err != nil {
+		return []string{errorStyle.Render(errorMessage(err)), mutedStyle.Render("Press r to try again.")}
 	}
-	return mutedStyle.Render("/ to search by name or group")
-}
-
-// componentsPlaceholder says why there are no component rows to draw, if that is so.
-func (m WatchPickerModel) componentsPlaceholder() ([]string, bool) {
-	listing, ok := m.currentListing()
-	if !ok {
-		return nil, true
-	}
-	if err := m.cache.failure(listing); err != nil {
-		return []string{errorStyle.Render(errorMessage(err)), mutedStyle.Render("Press r to try again.")}, true
-	}
-	components, loaded := m.cache.lookup(listing)
+	all, loaded := m.providerComponents()
+	visible := filterComponents(all, m.componentsFilter.query)
 	switch {
 	case !loaded:
-		return []string{loadingText}, true
-	case len(components) == 0 && listing.query != "":
-		return []string{"No components match."}, true
-	case len(components) == 0:
-		return []string{"This provider has no components."}, true
+		return []string{loadingText}
+	case len(all) == 0:
+		return []string{"This provider has no components."}
+	case len(visible) == 0:
+		return []string{"No components match."}
 	}
-	return nil, false
+	return m.componentRows(visible)
 }
 
-func (m WatchPickerModel) componentRows() []string {
-	components := m.currentComponents()
+func (m WatchPickerModel) componentRows(components []api.Component) []string {
 	nameWidth, groupWidth, statusWidth := columnWidths(components)
 	start, end := visibleRange(len(components), m.componentIndex, m.visibleRowCount())
 	rows := make([]string, 0, end-start)

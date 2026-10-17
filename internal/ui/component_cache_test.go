@@ -14,7 +14,7 @@ func (c *fakeClock) now() time.Time { return c.current }
 
 func (c *fakeClock) advance(duration time.Duration) { c.current = c.current.Add(duration) }
 
-var github = componentListing{providerSlug: "github"}
+const github = "github"
 
 func TestACachedAnswerIsUsedUntilItIsOlderThanTheCacheLifetime(t *testing.T) {
 	clock := &fakeClock{current: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)}
@@ -52,7 +52,7 @@ func TestCachedProvidersExpireLikeAnswersDo(t *testing.T) {
 
 func TestAnAnswerOrAFailureEndsPending(t *testing.T) {
 	cache := newTestCache()
-	other := componentListing{providerSlug: "cloudflare"}
+	other := "cloudflare"
 	cache.markPending(github)
 	cache.markPending(other)
 
@@ -75,12 +75,12 @@ func TestAnAnswerClearsAnEarlierFailure(t *testing.T) {
 	}
 }
 
-func TestPendingIsPerListing(t *testing.T) {
+func TestPendingIsPerProvider(t *testing.T) {
 	cache := newTestCache()
 
 	cache.markPending(github)
 
-	if cache.isPending(componentListing{providerSlug: "github", query: "api"}) || cache.isPending(componentListing{providerSlug: "cloudflare"}) {
-		t.Fatal("a search and another provider are different listings")
+	if cache.isPending("cloudflare") {
+		t.Fatal("another provider is another listing")
 	}
 }

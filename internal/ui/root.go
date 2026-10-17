@@ -119,9 +119,9 @@ func (m RootModel) keepAnswerWithoutPicker(msg tea.Msg) {
 	case providersLoadedMsg:
 		m.cache.storeProviders(msg.providers)
 	case providerComponentsLoadedMsg:
-		m.cache.store(msg.listing, msg.components)
+		m.cache.store(msg.providerSlug, msg.components)
 	case providerComponentsFailedMsg:
-		m.cache.fail(msg.listing, msg.err)
+		m.cache.fail(msg.providerSlug, msg.err)
 	}
 }
 

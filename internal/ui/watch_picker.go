@@ -1,10 +1,8 @@
 package ui
 
 import (
-	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/statuspane/tui/internal/api"
@@ -34,13 +32,12 @@ type WatchPickerModel struct {
 	providersLoaded bool
 	providersErr    error
 	providerIndex   int
+	providersFilter paneFilter
 
-	cache          *componentCache
-	settleSequence int
-	componentIndex int
-	query          string
-	search         textinput.Model
-	isSearching    bool
+	cache            *componentCache
+	settleSequence   int
+	componentIndex   int
+	componentsFilter paneFilter
 
 	focusedPane       pickerPane
 	isSaving          bool
@@ -54,26 +51,25 @@ type WatchPickerModel struct {
 // NewWatchPickerModel starts from the providers in the cache, if it has them; the cache outlives
 // the picker, so reopening it asks the API for nothing it already knows.
 func NewWatchPickerModel(backend WatchPickerBackend, cache *componentCache, open openWatchPickerMsg, width, height int) WatchPickerModel {
-	search := textinput.New()
-	search.Prompt = "/ "
 	providers, hasProviders := cache.cachedProviders()
 	return WatchPickerModel{
-		backend:         backend,
-		appSlug:         open.appSlug,
-		appName:         open.appName,
-		selection:       newWatchSelection(open.watchedComponents),
-		providers:       providers,
-		providersLoaded: hasProviders,
-		cache:           cache,
-		search:          search,
-		width:           width,
-		height:          height,
+		backend:          backend,
+		appSlug:          open.appSlug,
+		appName:          open.appName,
+		selection:        newWatchSelection(open.watchedComponents),
+		providers:        providers,
+		providersLoaded:  hasProviders,
+		providersFilter:  newPaneFilter(),
+		cache:            cache,
+		componentsFilter: newPaneFilter(),
+		width:            width,
+		height:           height,
 	}
 }
 
 func (m WatchPickerModel) Init() tea.Cmd {
 	if m.providersLoaded {
-		return m.fetchListingIfMissing()
+		return m.fetchComponentsIfMissing()
 	}
 	return fetchProviders(m.backend)
 }
@@ -90,7 +86,7 @@ func (m WatchPickerModel) Update(msg tea.Msg) (WatchPickerModel, tea.Cmd) {
 	case providersLoadedMsg:
 		m.cache.storeProviders(msg.providers)
 		m.providers, m.providersLoaded, m.providersErr = msg.providers, true, nil
-		return m, m.fetchListingIfMissing()
+		return m, m.fetchComponentsIfMissing()
 
 	case providersFailedMsg:
 		m.providersErr = msg.err
@@ -100,15 +96,15 @@ func (m WatchPickerModel) Update(msg tea.Msg) (WatchPickerModel, tea.Cmd) {
 		if msg.sequence != m.settleSequence {
 			return m, nil
 		}
-		return m, m.fetchListingIfMissing()
+		return m, m.fetchComponentsIfMissing()
 
 	case providerComponentsLoadedMsg:
-		m.cache.store(msg.listing, msg.components)
-		m.componentIndex = clampIndex(m.componentIndex, 0, len(m.currentComponents()))
+		m.cache.store(msg.providerSlug, msg.components)
+		m.componentIndex = clampIndex(m.componentIndex, 0, len(m.visibleComponents()))
 		return m, nil
 
 	case providerComponentsFailedMsg:
-		m.cache.fail(msg.listing, msg.err)
+		m.cache.fail(msg.providerSlug, msg.err)
 		return m, nil
 
 	case saveWatchedComponentsFailedMsg:
@@ -116,12 +112,15 @@ func (m WatchPickerModel) Update(msg tea.Msg) (WatchPickerModel, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.isSearching {
-		var cmd tea.Cmd
-		m.search, cmd = m.search.Update(msg)
-		return m, cmd
+	// Messages the filter box in use is waiting for, such as its cursor blinking.
+	var cmd tea.Cmd
+	switch {
+	case m.providersFilter.active:
+		m.providersFilter, cmd = m.providersFilter.update(msg)
+	case m.componentsFilter.active:
+		m.componentsFilter, cmd = m.componentsFilter.update(msg)
 	}
-	return m, nil
+	return m, cmd
 }
 
 func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel, tea.Cmd) {
@@ -131,8 +130,11 @@ func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel,
 	if m.isSaving {
 		return m, nil
 	}
-	if m.isSearching {
-		return m.handleSearchKey(keyPress)
+	if m.providersFilter.active {
+		return m.handleProvidersFilterKey(keyPress)
+	}
+	if m.componentsFilter.active {
+		return m.handleComponentsFilterKey(keyPress)
 	}
 
 	wasConfirmingDiscard := m.confirmingDiscard
@@ -154,7 +156,7 @@ func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel,
 	case "space":
 		return m.toggleComponentAtCursor(), nil
 	case "/":
-		return m.startSearch()
+		return m.startFilter()
 	case "r":
 		return m.refresh()
 	case "s":
@@ -173,31 +175,6 @@ func (m WatchPickerModel) cancelOrConfirmDiscard(wasConfirmingDiscard bool) (Wat
 	return m, nil
 }
 
-func (m WatchPickerModel) handleSearchKey(keyPress tea.KeyPressMsg) (WatchPickerModel, tea.Cmd) {
-	switch keyPress.String() {
-	case "enter":
-		return m.applySearch(strings.TrimSpace(m.search.Value()))
-	case "esc":
-		m.search.SetValue("")
-		return m.applySearch("")
-	}
-	var cmd tea.Cmd
-	m.search, cmd = m.search.Update(keyPress)
-	return m, cmd
-}
-
-func (m WatchPickerModel) applySearch(query string) (WatchPickerModel, tea.Cmd) {
-	m.query, m.isSearching, m.componentIndex = query, false, 0
-	m.search.Blur()
-	return m, m.fetchListingIfMissing()
-}
-
-func (m WatchPickerModel) startSearch() (WatchPickerModel, tea.Cmd) {
-	m.focusedPane, m.isSearching = componentsPane, true
-	m.search.SetValue(m.query)
-	return m, m.search.Focus()
-}
-
 func (m WatchPickerModel) startSave() (WatchPickerModel, tea.Cmd) {
 	if m.selection.changeCount() == 0 {
 		return m, nil
@@ -208,11 +185,28 @@ func (m WatchPickerModel) startSave() (WatchPickerModel, tea.Cmd) {
 
 func (m WatchPickerModel) moveCursor(step int) (WatchPickerModel, tea.Cmd) {
 	if m.focusedPane == componentsPane {
-		m.componentIndex = clampIndex(m.componentIndex, step, len(m.currentComponents()))
+		m.componentIndex = clampIndex(m.componentIndex, step, len(m.visibleComponents()))
 		return m, nil
 	}
-	m.providerIndex = clampIndex(m.providerIndex, step, len(m.providers))
-	m.componentIndex = 0
+	index := clampIndex(m.providerIndex, step, len(m.visibleProviders()))
+	if index == m.providerIndex {
+		return m, nil
+	}
+	return m.landOnProvider(index)
+}
+
+// landOnProvider puts the cursor on the visible provider at index and drops what belonged to the
+// one it left, the component cursor and the component filter. The provider's components are
+// fetched once the cursor rests there (see scheduleSettle).
+func (m WatchPickerModel) landOnProvider(index int) (WatchPickerModel, tea.Cmd) {
+	m.providerIndex, m.componentIndex = index, 0
+	m.componentsFilter = m.componentsFilter.cleared()
+	return m.scheduleSettle()
+}
+
+// scheduleSettle starts the timer after which the provider under the cursor is fetched; a timer
+// from an earlier cursor position is ignored when it fires.
+func (m WatchPickerModel) scheduleSettle() (WatchPickerModel, tea.Cmd) {
 	m.settleSequence++
 	sequence := m.settleSequence
 	return m, tea.Tick(providerSettleDelay, func(time.Time) tea.Msg {
@@ -227,20 +221,20 @@ func (m WatchPickerModel) refresh() (WatchPickerModel, tea.Cmd) {
 		m.providersErr = nil
 		return m, fetchProviders(m.backend)
 	}
-	listing, ok := m.currentListing()
-	if !ok || m.cache.isPending(listing) {
+	providerSlug, ok := m.providerSlugAtCursor()
+	if !ok || m.cache.isPending(providerSlug) {
 		return m, nil
 	}
-	m.cache.forgetFailure(listing)
-	m.cache.markPending(listing)
-	return m, fetchProviderComponents(m.backend, listing)
+	m.cache.forgetFailure(providerSlug)
+	m.cache.markPending(providerSlug)
+	return m, fetchProviderComponents(m.backend, providerSlug)
 }
 
 func (m WatchPickerModel) toggleComponentAtCursor() WatchPickerModel {
 	if m.focusedPane != componentsPane {
 		return m
 	}
-	components := m.currentComponents()
+	components := m.visibleComponents()
 	if m.componentIndex >= len(components) {
 		return m
 	}
@@ -249,41 +243,48 @@ func (m WatchPickerModel) toggleComponentAtCursor() WatchPickerModel {
 }
 
 func (m WatchPickerModel) providerAtCursor() (api.Provider, bool) {
-	if m.providerIndex >= len(m.providers) {
+	providers := m.visibleProviders()
+	if m.providerIndex >= len(providers) {
 		return api.Provider{}, false
 	}
-	return m.providers[m.providerIndex], true
+	return providers[m.providerIndex], true
 }
 
-func (m WatchPickerModel) currentListing() (componentListing, bool) {
+func (m WatchPickerModel) providerSlugAtCursor() (string, bool) {
 	provider, ok := m.providerAtCursor()
-	return componentListing{providerSlug: provider.Slug, query: m.query}, ok
+	return provider.Slug, ok
 }
 
-// currentComponents are the cached components for the provider and search on screen; nil while
-// they are still loading.
-func (m WatchPickerModel) currentComponents() []api.Component {
-	listing, ok := m.currentListing()
+// providerComponents are all of the selected provider's cached components, whatever the filter
+// says; loaded is false while they are on their way.
+func (m WatchPickerModel) providerComponents() (components []api.Component, loaded bool) {
+	providerSlug, ok := m.providerSlugAtCursor()
 	if !ok {
-		return nil
+		return nil, false
 	}
-	components, _ := m.cache.lookup(listing)
-	return components
+	return m.cache.lookup(providerSlug)
 }
 
-// fetchListingIfMissing fetches what the screen shows unless it is cached, already on its way, or
-// failed: a failure is asked for again only when the user presses r, so a refused request, such
+// visibleComponents are the selected provider's components that the filter lets through; the
+// cursor moves over these. Nil while they are still loading.
+func (m WatchPickerModel) visibleComponents() []api.Component {
+	components, _ := m.providerComponents()
+	return filterComponents(components, m.componentsFilter.query)
+}
+
+// fetchComponentsIfMissing fetches what the screen shows unless it is cached, already on its way,
+// or failed: a failure is asked for again only when the user presses r, so a refused request, such
 // as a rate limit, is not repeated on every visit.
-func (m WatchPickerModel) fetchListingIfMissing() tea.Cmd {
-	listing, ok := m.currentListing()
+func (m WatchPickerModel) fetchComponentsIfMissing() tea.Cmd {
+	providerSlug, ok := m.providerSlugAtCursor()
 	if !ok {
 		return nil
 	}
-	if _, cached := m.cache.lookup(listing); cached || m.cache.isPending(listing) || m.cache.failure(listing) != nil {
+	if _, cached := m.cache.lookup(providerSlug); cached || m.cache.isPending(providerSlug) || m.cache.failure(providerSlug) != nil {
 		return nil
 	}
-	m.cache.markPending(listing)
-	return fetchProviderComponents(m.backend, listing)
+	m.cache.markPending(providerSlug)
+	return fetchProviderComponents(m.backend, providerSlug)
 }
 
 func otherPane(pane pickerPane) pickerPane {
