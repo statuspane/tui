@@ -37,10 +37,19 @@ detail, or a dialog (`createAppDialog`, `deleteAppDialog`) instead of any of the
   chosen set, including components of providers that were never opened; never build the request
   from what is on screen. `componentRefs()` is never nil, because an empty selection must reach
   the API as `[]`.
-- Picker fetches are keyed by `componentListing` (provider and search) and cached in a
-  `componentCache` while the picker is open; every copy of the model shares that one cache. A
-  response carries its listing, so one for a provider the user already left is cached but not
-  shown. A failed fetch is retried when the user comes back to it.
+- The API allows 60 requests a minute per key and the catalog has 87 providers, so the picker
+  must not ask on every cursor move. Moving over a provider only schedules a
+  `providerSettledMsg` (`providerSettleDelay`, with a sequence number like the refresh ticks);
+  the fetch happens when the cursor has rested there. Search applies on `enter` for the same
+  reason.
+- Answers live in a `componentCache` owned by `RootModel` and shared by every picker opened
+  during the run: keyed by `componentListing` (provider and search), trusted for
+  `cacheLifetime`, and also holding the provider list. It records requests in flight (so going
+  back to a provider before its answer lands asks nothing) and failures (a refused request, such
+  as a 429, is not repeated by visiting again; `r` asks again). The root files answers that
+  arrive after the picker closed (`keepAnswerWithoutPicker`); otherwise a listing would stay
+  pending for good. A response carries its listing, so one for a provider the user already left
+  is cached but not shown.
 - Picker search applies on `enter`, not per keystroke, to spare the API's rate limit. While the
   search box has focus every key is text; `esc` clears the search.
 - The picker's `esc` asks first when there are unsaved changes (a second `esc` discards), and

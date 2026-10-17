@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -15,6 +16,11 @@ const (
 	providersPane pickerPane = iota
 	componentsPane
 )
+
+// providerSettleDelay is how long the cursor has to rest on a provider before its components are
+// fetched. Scrolling through the catalog, for example by holding a key, must not ask the API
+// about every provider passed on the way.
+const providerSettleDelay = 300 * time.Millisecond
 
 type WatchPickerModel struct {
 	backend WatchPickerBackend
@@ -30,6 +36,7 @@ type WatchPickerModel struct {
 	providerIndex   int
 
 	cache          *componentCache
+	settleSequence int
 	componentIndex int
 	query          string
 	search         textinput.Model
@@ -44,22 +51,30 @@ type WatchPickerModel struct {
 	height int
 }
 
-func NewWatchPickerModel(backend WatchPickerBackend, open openWatchPickerMsg, width, height int) WatchPickerModel {
+// NewWatchPickerModel starts from the providers in the cache, if it has them; the cache outlives
+// the picker, so reopening it asks the API for nothing it already knows.
+func NewWatchPickerModel(backend WatchPickerBackend, cache *componentCache, open openWatchPickerMsg, width, height int) WatchPickerModel {
 	search := textinput.New()
 	search.Prompt = "/ "
+	providers, hasProviders := cache.cachedProviders()
 	return WatchPickerModel{
-		backend:   backend,
-		appSlug:   open.appSlug,
-		appName:   open.appName,
-		selection: newWatchSelection(open.watchedComponents),
-		cache:     newComponentCache(),
-		search:    search,
-		width:     width,
-		height:    height,
+		backend:         backend,
+		appSlug:         open.appSlug,
+		appName:         open.appName,
+		selection:       newWatchSelection(open.watchedComponents),
+		providers:       providers,
+		providersLoaded: hasProviders,
+		cache:           cache,
+		search:          search,
+		width:           width,
+		height:          height,
 	}
 }
 
 func (m WatchPickerModel) Init() tea.Cmd {
+	if m.providersLoaded {
+		return m.fetchListingIfMissing()
+	}
 	return fetchProviders(m.backend)
 }
 
@@ -73,12 +88,19 @@ func (m WatchPickerModel) Update(msg tea.Msg) (WatchPickerModel, tea.Cmd) {
 		return m, nil
 
 	case providersLoadedMsg:
+		m.cache.storeProviders(msg.providers)
 		m.providers, m.providersLoaded, m.providersErr = msg.providers, true, nil
 		return m, m.fetchListingIfMissing()
 
 	case providersFailedMsg:
 		m.providersErr = msg.err
 		return m, nil
+
+	case providerSettledMsg:
+		if msg.sequence != m.settleSequence {
+			return m, nil
+		}
+		return m, m.fetchListingIfMissing()
 
 	case providerComponentsLoadedMsg:
 		m.cache.store(msg.listing, msg.components)
@@ -133,6 +155,8 @@ func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel,
 		return m.toggleComponentAtCursor(), nil
 	case "/":
 		return m.startSearch()
+	case "r":
+		return m.refresh()
 	case "s":
 		return m.startSave()
 	}
@@ -189,7 +213,27 @@ func (m WatchPickerModel) moveCursor(step int) (WatchPickerModel, tea.Cmd) {
 	}
 	m.providerIndex = clampIndex(m.providerIndex, step, len(m.providers))
 	m.componentIndex = 0
-	return m, m.fetchListingIfMissing()
+	m.settleSequence++
+	sequence := m.settleSequence
+	return m, tea.Tick(providerSettleDelay, func(time.Time) tea.Msg {
+		return providerSettledMsg{sequence: sequence}
+	})
+}
+
+// refresh asks again for what is on screen: the provider list if that failed, else the selected
+// provider's components, which stay visible until the new answer arrives.
+func (m WatchPickerModel) refresh() (WatchPickerModel, tea.Cmd) {
+	if m.providersErr != nil {
+		m.providersErr = nil
+		return m, fetchProviders(m.backend)
+	}
+	listing, ok := m.currentListing()
+	if !ok || m.cache.isPending(listing) {
+		return m, nil
+	}
+	m.cache.forgetFailure(listing)
+	m.cache.markPending(listing)
+	return m, fetchProviderComponents(m.backend, listing)
 }
 
 func (m WatchPickerModel) toggleComponentAtCursor() WatchPickerModel {
@@ -227,17 +271,18 @@ func (m WatchPickerModel) currentComponents() []api.Component {
 	return components
 }
 
-// fetchListingIfMissing fetches what the screen shows unless it is already cached. A listing that
-// failed is fetched again when the user comes back to it.
+// fetchListingIfMissing fetches what the screen shows unless it is cached, already on its way, or
+// failed: a failure is asked for again only when the user presses r, so a refused request, such
+// as a rate limit, is not repeated on every visit.
 func (m WatchPickerModel) fetchListingIfMissing() tea.Cmd {
 	listing, ok := m.currentListing()
 	if !ok {
 		return nil
 	}
-	if _, cached := m.cache.lookup(listing); cached {
+	if _, cached := m.cache.lookup(listing); cached || m.cache.isPending(listing) || m.cache.failure(listing) != nil {
 		return nil
 	}
-	m.cache.forgetFailure(listing)
+	m.cache.markPending(listing)
 	return fetchProviderComponents(m.backend, listing)
 }
 

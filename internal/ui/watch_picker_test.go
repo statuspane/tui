@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -83,13 +84,36 @@ var (
 	keyEnter  = tea.KeyPressMsg{Code: tea.KeyEnter}
 	keyJ      = tea.KeyPressMsg{Code: 'j', Text: "j"}
 	keyK      = tea.KeyPressMsg{Code: 'k', Text: "k"}
+	keyR      = tea.KeyPressMsg{Code: 'r', Text: "r"}
 	keyS      = tea.KeyPressMsg{Code: 's', Text: "s"}
 	keySlash  = tea.KeyPressMsg{Code: '/', Text: "/"}
 	keyCtrlC  = tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 )
 
+func newTestCache() *componentCache {
+	return newComponentCache(time.Now)
+}
+
 func newTestPicker(backend fakePickerBackend, watched ...api.Component) WatchPickerModel {
-	return NewWatchPickerModel(backend, openWatchPickerMsg{appSlug: "web-app", appName: "Web App", watchedComponents: watched}, 100, 30)
+	return newTestPickerWithCache(backend, newTestCache(), watched...)
+}
+
+func newTestPickerWithCache(backend fakePickerBackend, cache *componentCache, watched ...api.Component) WatchPickerModel {
+	return NewWatchPickerModel(backend, cache, openWatchPickerMsg{appSlug: "web-app", appName: "Web App", watchedComponents: watched}, 100, 30)
+}
+
+// settleCursor lets the cursor rest where it is, which is what makes the picker ask the API about
+// the provider under it.
+func settleCursor(m WatchPickerModel) (WatchPickerModel, tea.Cmd) {
+	return m.Update(providerSettledMsg{sequence: m.settleSequence})
+}
+
+// moveToProvider presses a key on the providers pane, waits for the cursor to rest and lets the
+// answer arrive.
+func moveToProvider(m WatchPickerModel, key tea.KeyPressMsg) WatchPickerModel {
+	m, _ = m.Update(key)
+	m, fetch := settleCursor(m)
+	return settle(m, fetch)
 }
 
 // settle runs the commands that answer at once and feeds their messages back until none are left.
@@ -405,7 +429,8 @@ func TestAnAnswerForAProviderTheUserLeftIsKeptButNotShown(t *testing.T) {
 
 	assertViewContains(t, m.View().Content, "Cloudflare components", "Loading…")
 	assertViewLacks(t, m.View().Content, "API Requests")
-	m, backToGithub := m.Update(keyK)
+	m, _ = m.Update(keyK)
+	m, backToGithub := settleCursor(m)
 	if backToGithub != nil {
 		t.Fatal("the late answer must have been cached")
 	}
@@ -414,28 +439,34 @@ func TestAnAnswerForAProviderTheUserLeftIsKeptButNotShown(t *testing.T) {
 
 func TestAProviderAlreadyLoadedIsNotFetchedAgain(t *testing.T) {
 	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
-	m, cmd := m.Update(keyJ)
-	m = settle(m, cmd)
+	m = moveToProvider(m, keyJ)
 
-	_, backToGithub := m.Update(keyK)
+	m, _ = m.Update(keyK)
+	_, backToGithub := settleCursor(m)
 
 	if backToGithub != nil {
 		t.Fatal("github is cached")
 	}
 }
 
-func TestAFailedProviderFetchShowsTheErrorAndIsTriedAgainOnReturn(t *testing.T) {
+func TestAFailedProviderFetchShowsTheErrorAndIsNotRetriedUntilRIsPressed(t *testing.T) {
+	var listings []componentListing
 	catalog := testCatalog()
 	catalog.componentsErr = errors.New("connection refused")
+	catalog.listings = &listings
 	m := openedPicker(fakePickerBackend{fakeProviderCatalog: catalog})
-	assertViewContains(t, m.View().Content, "connection refused")
+	assertViewContains(t, m.View().Content, "connection refused", "Press r to try again")
+	m = moveToProvider(m, keyJ)
 
-	m, away := m.Update(keyJ)
-	m = settle(m, away)
-	_, back := m.Update(keyK)
+	m, _ = m.Update(keyK)
+	m, backToGithub := settleCursor(m)
+	if backToGithub != nil || len(listings) != 2 {
+		t.Fatalf("a refused request must not be repeated by visiting again: listings = %+v", listings)
+	}
+	_, retry := m.Update(keyR)
 
-	if back == nil {
-		t.Fatal("a failed request must be tried again")
+	if retry == nil {
+		t.Fatal("r must ask again")
 	}
 }
 
@@ -476,7 +507,7 @@ func TestALongListScrollsWithTheCursorInAShortWindow(t *testing.T) {
 	for index := range 20 {
 		catalog.components["github"] = append(catalog.components["github"], namedComponent("github", fmt.Sprintf("c%02d", index), fmt.Sprintf("Component %02d", index), nil))
 	}
-	m := NewWatchPickerModel(fakePickerBackend{fakeProviderCatalog: catalog}, openWatchPickerMsg{appSlug: "web-app", appName: "Web App"}, 100, 12)
+	m := NewWatchPickerModel(fakePickerBackend{fakeProviderCatalog: catalog}, newTestCache(), openWatchPickerMsg{appSlug: "web-app", appName: "Web App"}, 100, 12)
 	m = settle(m, m.Init())
 	m, _ = m.Update(keyTab)
 	assertViewContains(t, m.View().Content, "Component 00")
@@ -491,7 +522,7 @@ func TestALongListScrollsWithTheCursorInAShortWindow(t *testing.T) {
 }
 
 func TestAWindowShorterThanTheChromeStillShowsAFewRows(t *testing.T) {
-	m := NewWatchPickerModel(fakePickerBackend{fakeProviderCatalog: testCatalog()}, openWatchPickerMsg{appSlug: "web-app", appName: "Web App"}, 100, 4)
+	m := NewWatchPickerModel(fakePickerBackend{fakeProviderCatalog: testCatalog()}, newTestCache(), openWatchPickerMsg{appSlug: "web-app", appName: "Web App"}, 100, 4)
 	m = settle(m, m.Init())
 
 	assertViewContains(t, m.View().Content, "API Requests", "Pages")
@@ -545,4 +576,117 @@ func TestClampIndexStaysInsideTheList(t *testing.T) {
 			}
 		})
 	}
+}
+
+func catalogOf(providerCount int) fakeProviderCatalog {
+	catalog := fakeProviderCatalog{components: map[string][]api.Component{}}
+	for index := range providerCount {
+		slug := fmt.Sprintf("p%02d", index)
+		catalog.providers = append(catalog.providers, api.Provider{Name: slug, Slug: slug})
+		catalog.components[slug] = []api.Component{namedComponent(slug, "a", "A", nil)}
+	}
+	return catalog
+}
+
+func TestScrollingThroughTheCatalogAsksTheAPIOnlyWhereTheCursorRests(t *testing.T) {
+	var listings []componentListing
+	catalog := catalogOf(87)
+	catalog.listings = &listings
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: catalog})
+	asked := len(listings)
+
+	var staleSettles []providerSettledMsg
+	for range 86 {
+		m, _ = m.Update(keyJ)
+		staleSettles = append(staleSettles, providerSettledMsg{sequence: m.settleSequence})
+	}
+	for _, settled := range staleSettles[:len(staleSettles)-1] {
+		var fetch tea.Cmd
+		m, fetch = m.Update(settled)
+		if fetch != nil {
+			t.Fatal("a settle from a position the cursor already left must not fetch")
+		}
+	}
+	m, fetch := settleCursor(m)
+	m = settle(m, fetch)
+
+	if got := len(listings) - asked; got != 1 {
+		t.Fatalf("scrolling through 87 providers asked the API %d times, want 1", got)
+	}
+	assertViewContains(t, m.View().Content, "p86 components")
+}
+
+func TestGoingBackAndForthBeforeAnAnswerArrivesAsksOnce(t *testing.T) {
+	var listings []componentListing
+	catalog := testCatalog()
+	catalog.listings = &listings
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: catalog})
+	asked := len(listings)
+
+	m, _ = m.Update(keyJ)
+	m, firstVisit := settleCursor(m) // the answer for Cloudflare has not arrived yet
+	m, _ = m.Update(keyK)
+	m, _ = settleCursor(m)
+	m, _ = m.Update(keyJ)
+	_, secondVisit := settleCursor(m)
+
+	if firstVisit == nil || secondVisit != nil {
+		t.Fatalf("first visit asked = %v, second visit asked = %v", firstVisit != nil, secondVisit != nil)
+	}
+	settle(m, firstVisit)
+	if got := len(listings) - asked; got != 1 {
+		t.Fatalf("asked the API %d times for Cloudflare, want 1", got)
+	}
+}
+
+func TestRRefreshesTheProviderOnScreenAndKeepsItsRowsUntilTheAnswer(t *testing.T) {
+	var listings []componentListing
+	catalog := testCatalog()
+	catalog.listings = &listings
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: catalog})
+
+	m, refresh := m.Update(keyR)
+	if refresh == nil {
+		t.Fatal("r must ask again")
+	}
+	assertViewContains(t, m.View().Content, "API Requests")
+	_, again := m.Update(keyR)
+	if again != nil {
+		t.Fatal("a second r while the first is on its way must not ask twice")
+	}
+	settle(m, refresh)
+
+	if len(listings) != 2 {
+		t.Fatalf("listings = %+v", listings)
+	}
+}
+
+func TestRTriesAFailedProviderListAgain(t *testing.T) {
+	catalog := testCatalog()
+	catalog.providersErr = errors.New("connection refused")
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: catalog})
+
+	_, retry := m.Update(keyR)
+
+	if retry == nil {
+		t.Fatal("r must fetch the providers again")
+	}
+}
+
+func TestReopeningThePickerReusesWhatTheCacheAlreadyHolds(t *testing.T) {
+	var listings []componentListing
+	catalog := testCatalog()
+	catalog.listings = &listings
+	cache := newTestCache()
+	first := newTestPickerWithCache(fakePickerBackend{fakeProviderCatalog: catalog}, cache)
+	settle(first, first.Init())
+	asked := len(listings)
+
+	second := newTestPickerWithCache(fakePickerBackend{fakeProviderCatalog: catalog}, cache)
+	cmd := second.Init()
+
+	if cmd != nil || len(listings) != asked {
+		t.Fatal("everything the second picker shows is already cached")
+	}
+	assertViewContains(t, second.View().Content, "GitHub", "Cloudflare", "API Requests")
 }

@@ -55,7 +55,7 @@ func (m WatchPickerModel) helpText() string {
 	if m.isSearching {
 		return "⏎ search · esc clear"
 	}
-	return "↑/↓ move · tab switch pane · space watch or unwatch · / search · s save · esc cancel"
+	return "↑/↓ move · tab switch pane · space watch or unwatch · / search · r refresh · s save · esc cancel"
 }
 
 func (m WatchPickerModel) visibleRowCount() int {
@@ -148,7 +148,7 @@ func (m WatchPickerModel) componentsPlaceholder() ([]string, bool) {
 		return nil, true
 	}
 	if err := m.cache.failure(listing); err != nil {
-		return []string{errorStyle.Render(errorMessage(err)), mutedStyle.Render("Move to another provider and back to try again.")}, true
+		return []string{errorStyle.Render(errorMessage(err)), mutedStyle.Render("Press r to try again.")}, true
 	}
 	components, loaded := m.cache.lookup(listing)
 	switch {

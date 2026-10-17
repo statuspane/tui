@@ -1,6 +1,10 @@
 package ui
 
-import tea "charm.land/bubbletea/v2"
+import (
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+)
 
 // Backend is everything the screens need from the API client.
 type Backend interface {
@@ -20,12 +24,13 @@ type RootModel struct {
 	detail  *AppDetailModel
 	picker  *WatchPickerModel
 	dialog  dialog
+	cache   *componentCache
 	width   int
 	height  int
 }
 
 func NewRootModel(backend Backend) RootModel {
-	return RootModel{backend: backend, apps: NewAppsModel(backend)}
+	return RootModel{backend: backend, apps: NewAppsModel(backend), cache: newComponentCache(time.Now)}
 }
 
 func (m RootModel) Init() tea.Cmd {
@@ -42,7 +47,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detail = nil
 		return m, nil
 	case openWatchPickerMsg:
-		picker := NewWatchPickerModel(m.backend, msg, m.width, m.height)
+		picker := NewWatchPickerModel(m.backend, m.cache, msg, m.width, m.height)
 		m.picker = &picker
 		return m, picker.Init()
 	case closeWatchPickerMsg:
@@ -73,6 +78,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, appsChanged
 	case tea.KeyPressMsg:
 		return m.updateActiveScreen(msg)
+	case providersLoadedMsg:
+		m.keepAnswerWithoutPicker(msg)
+	case providerComponentsLoadedMsg:
+		m.keepAnswerWithoutPicker(msg)
+	case providerComponentsFailedMsg:
+		m.keepAnswerWithoutPicker(msg)
 	}
 
 	// Everything else (fetch results, ticks) goes to every screen; each ignores what isn't its own.
@@ -95,6 +106,23 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, dialogCmd)
 	}
 	return m, tea.Batch(cmds...)
+}
+
+// keepAnswerWithoutPicker files an answer that arrives after the picker was closed. Without it a
+// request that was in flight at that moment would stay "pending" in the shared cache for good,
+// and its answer would be thrown away.
+func (m RootModel) keepAnswerWithoutPicker(msg tea.Msg) {
+	if m.picker != nil {
+		return
+	}
+	switch msg := msg.(type) {
+	case providersLoadedMsg:
+		m.cache.storeProviders(msg.providers)
+	case providerComponentsLoadedMsg:
+		m.cache.store(msg.listing, msg.components)
+	case providerComponentsFailedMsg:
+		m.cache.fail(msg.listing, msg.err)
+	}
 }
 
 // closePickerAfterSave gives the app screen the app as the API now has it, and tells the list,

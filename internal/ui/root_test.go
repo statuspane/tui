@@ -327,3 +327,26 @@ func TestASavedSetClosesThePickerUpdatesTheDetailAndReloadsTheList(t *testing.T)
 		t.Fatal("the list must be told to reload")
 	}
 }
+
+func TestAnswersThatArriveAfterThePickerClosedAreKeptNotLostAsPending(t *testing.T) {
+	var listings []componentListing
+	catalog := testCatalog()
+	catalog.listings = &listings
+	m := NewRootModel(fakeBackend{fakeProviderCatalog: catalog})
+	m, _ = sendRoot(m, tea.WindowSizeMsg{Width: 100, Height: 30})
+	m, _ = sendRoot(m, openWatchPickerMsg{appSlug: "web-app", appName: "Web App"})
+	m, fetchComponents := sendRoot(m, providersLoadedMsg{providers: catalog.providers}) // the request is now on its way
+	m, _ = sendRoot(m, closeWatchPickerMsg{})
+
+	answer := collectMessages(fetchComponents)
+	for _, msg := range answer {
+		m, _ = sendRoot(m, msg)
+	}
+	listings = nil
+	m, reopened := sendRoot(m, openWatchPickerMsg{appSlug: "web-app", appName: "Web App"})
+
+	if len(answer) == 0 || len(listings) != 0 || len(collectMessages(reopened)) != 0 {
+		t.Fatalf("answer = %d messages, listings asked again = %+v", len(answer), listings)
+	}
+	assertViewContains(t, m.View().Content, "GitHub", "API Requests")
+}
