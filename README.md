@@ -46,11 +46,13 @@ in the file, for example to use a local server. Environment variables win over t
 
 `↑/↓` move, `enter` opens an app, `esc` goes back, `n` creates an app, `d` deletes the selected
 app (you type its name to confirm), `r` refreshes, `q` quits. On an app's screen, `w` opens the
-component picker: choose a provider, `space` watches or unwatches a component, `/` searches that
-provider's components by name or group (`enter` applies it), `r` asks again for the provider on
-screen, and `s` saves. Search is per provider; the API cannot search across providers. The API
-allows 60 requests a minute per key, so the picker loads a provider only once the cursor rests
-on it and remembers what it loaded for five minutes.
+component picker: choose a provider, `space` watches or unwatches a component, `r` asks again
+for the provider on screen, and `s` saves. `/` filters the pane that has the focus as you type
+(`enter` keeps the filter, `esc` clears it): on the providers by name, slug or category, on the
+components by name or group. Filtering makes no request, and a component filter belongs to the
+provider it was typed for; the API cannot search across providers. The API allows 60 requests a
+minute per key, so the picker loads a provider only once the cursor rests on it and remembers
+what it loaded for five minutes.
 
 ## Develop
 

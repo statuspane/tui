@@ -6,6 +6,20 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Filter the providers in the component picker: with the provider list focused, `/` narrows it as
+  you type to the providers whose name, slug or category contains the text (`dev` finds GitHub
+  through Developer Tools). `enter` keeps the filter and `esc` clears it. Filtering makes no
+  requests, so it does not count against the API's rate limit.
+
+### Changed
+
+- Searching a provider's components in the picker now filters as you type instead of waiting for
+  `enter`, and makes no request: it filters the list the picker already holds, by name or group,
+  ignoring case. The search belongs to the provider it was typed for and clears when you move to
+  another.
+
 ## [0.2.0] - 2026-10-17
 
 Manage apps from the TUI: create and delete them, and choose which components they watch.
