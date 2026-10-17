@@ -8,6 +8,9 @@ All notable user-facing changes are listed here. The format follows
 
 ### Added
 
+- The picker is easier to scan in a long list: the row under the cursor is a bar across the whole
+  row, and chosen components stand out across their name (watched in green, to be added in bold
+  blue, to be removed in red and struck through), on top of the `[x]`, `[+]` and `[-]` markers.
 - A provider's components in the picker are listed under their group, with how many of the
   group's components are chosen (`Core Services  2/5 watched`); components without a group come
   last under "Ungrouped", and a provider with no groups looks as before. `g` watches or unwatches

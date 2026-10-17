@@ -185,25 +185,63 @@ func headingRow(line componentLine) string {
 		mutedStyle.Render(fmt.Sprintf("%d/%d watched", line.chosen, line.total))
 }
 
+// componentRow is one component. The row under the cursor is a bar across the whole row, drawn
+// from plain text because styles nested inside a bar would end it early. The other rows show
+// their state in the marker and across the name.
 func (m WatchPickerModel) componentRow(component api.Component, isCursor bool, nameWidth, statusWidth int) string {
-	marker, name := noSelectionMarker, fmt.Sprintf("%-*s", nameWidth, component.Name)
+	state := m.selection.stateOf(keyOf(component))
+	padding := strings.Repeat(" ", max(nameWidth-lipgloss.Width(component.Name), 0))
 	if isCursor && m.focusedPane == componentsPane {
-		marker, name = selectionMarker, selectedStyle.Render(name)
+		status := fmt.Sprintf("%-*s", statusWidth, statusLabel(component.Status))
+		return cursorRowStyle.Render(selectionMarker + markerText(state) + " " + component.Name + padding + columnGap + status)
 	}
-	return marker + watchMarker(m.selection.stateOf(keyOf(component))) + " " + name + columnGap + renderStatus(component.Status, statusWidth)
+	// The padding stays outside the style: a strikethrough would run through it.
+	return noSelectionMarker + watchMarker(state) + " " + nameStyleFor(state).Render(component.Name) + padding + columnGap + renderStatus(component.Status, statusWidth)
 }
 
-// watchMarker shows whether a component is watched, will be, will stop being, or is not.
-func watchMarker(state watchState) string {
+// markerText is how a state reads without colour: watched, to be added, to be removed, not watched.
+func markerText(state watchState) string {
 	switch state {
 	case stateWatched:
-		return lipgloss.NewStyle().Foreground(colorGreen).Render("[x]")
+		return "[x]"
 	case stateAdded:
-		return lipgloss.NewStyle().Foreground(colorBlue).Render("[+]")
+		return "[+]"
 	case stateRemoved:
-		return lipgloss.NewStyle().Foreground(colorRed).Render("[-]")
+		return "[-]"
 	}
-	return mutedStyle.Render("[ ]")
+	return "[ ]"
+}
+
+// watchMarker is the marker in its state's colour.
+func watchMarker(state watchState) string {
+	return markerStyleFor(state).Render(markerText(state))
+}
+
+func markerStyleFor(state watchState) lipgloss.Style {
+	switch state {
+	case stateWatched:
+		return lipgloss.NewStyle().Foreground(colorGreen)
+	case stateAdded:
+		return lipgloss.NewStyle().Foreground(colorBlue)
+	case stateRemoved:
+		return lipgloss.NewStyle().Foreground(colorRed)
+	}
+	return mutedStyle
+}
+
+// nameStyleFor makes the chosen components easy to spot in a long list: watched in green, to be
+// added in bold blue, to be removed in red and struck through; a component that is not watched
+// stays plain.
+func nameStyleFor(state watchState) lipgloss.Style {
+	switch state {
+	case stateWatched:
+		return lipgloss.NewStyle().Foreground(colorGreen)
+	case stateAdded:
+		return lipgloss.NewStyle().Foreground(colorBlue).Bold(true)
+	case stateRemoved:
+		return lipgloss.NewStyle().Foreground(colorRed).Strikethrough(true)
+	}
+	return lipgloss.NewStyle()
 }
 
 func columnWidths(components []api.Component) (nameWidth, statusWidth int) {

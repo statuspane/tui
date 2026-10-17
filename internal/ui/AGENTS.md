@@ -55,6 +55,12 @@ detail, or a dialog (`createAppDialog`, `deleteAppDialog`) instead of any of the
   provider where nothing has a group gets no headings. `g` acts on the visible members of the
   group (`groupBounds`), never on components a filter hides. Never sort or reorder the cached
   slice: `filterComponents` can hand back the cache's own slice, and `orderedByGroup` copies it.
+- A component row shows its state twice: the marker text (`[x]`, `[+]`, `[-]`, `[ ]`, which still
+  reads without colour) and `nameStyleFor` across the name. The row under the cursor in the
+  focused pane is one `cursorRowStyle` bar drawn from plain text: styles nested inside a bar end
+  it early, so it carries no state colours. In tests, read rows with `plain()` or `rawRow()`:
+  lipgloss applies strikethrough to each character on its own, so a struck-through name is not
+  contiguous in the raw view.
 - The API allows 60 requests a minute per key and the catalog has 87 providers, so the picker
   must not ask on every cursor move. Moving over a provider only schedules a
   `providerSettledMsg` (`providerSettleDelay`, with a sequence number like the refresh ticks);

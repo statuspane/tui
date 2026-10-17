@@ -17,6 +17,9 @@ var (
 	selectedStyle = lipgloss.NewStyle().Bold(true)
 	mutedStyle    = lipgloss.NewStyle().Foreground(colorMuted)
 	errorStyle    = lipgloss.NewStyle().Foreground(colorRed)
+
+	// cursorRowStyle is the bar across the row under the cursor; reverse video works on any theme.
+	cursorRowStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
 )
 
 // Keyed by the API's incident impact levels.
