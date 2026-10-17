@@ -155,6 +155,8 @@ func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel,
 		return m.moveCursor(1)
 	case "space":
 		return m.toggleComponentAtCursor(), nil
+	case "g":
+		return m.toggleGroupAtCursor(), nil
 	case "/":
 		return m.startFilter()
 	case "r":
@@ -242,6 +244,28 @@ func (m WatchPickerModel) toggleComponentAtCursor() WatchPickerModel {
 	return m
 }
 
+// toggleGroupAtCursor chooses the rest of the visible components of the group under the cursor,
+// or, when they are all chosen already, unchooses them all. Components a filter hides are left
+// alone: the user never changes what cannot be seen.
+func (m WatchPickerModel) toggleGroupAtCursor() WatchPickerModel {
+	if m.focusedPane != componentsPane {
+		return m
+	}
+	components := m.visibleComponents()
+	if m.componentIndex >= len(components) {
+		return m
+	}
+	start, end := groupBounds(components, m.componentIndex)
+	keys := make([]componentKey, 0, end-start)
+	allChosen := true
+	for _, component := range components[start:end] {
+		keys = append(keys, keyOf(component))
+		allChosen = allChosen && m.selection.isChosen(keyOf(component))
+	}
+	m.selection = m.selection.withChosen(keys, !allChosen)
+	return m
+}
+
 func (m WatchPickerModel) providerAtCursor() (api.Provider, bool) {
 	providers := m.visibleProviders()
 	if m.providerIndex >= len(providers) {
@@ -265,11 +289,12 @@ func (m WatchPickerModel) providerComponents() (components []api.Component, load
 	return m.cache.lookup(providerSlug)
 }
 
-// visibleComponents are the selected provider's components that the filter lets through; the
-// cursor moves over these. Nil while they are still loading.
+// visibleComponents are the selected provider's components that the filter lets through, with
+// each group together; the cursor moves over these, in this order, and group headings are only
+// drawn between them. Nil while they are still loading.
 func (m WatchPickerModel) visibleComponents() []api.Component {
 	components, _ := m.providerComponents()
-	return filterComponents(components, m.componentsFilter.query)
+	return orderedByGroup(filterComponents(components, m.componentsFilter.query))
 }
 
 // fetchComponentsIfMissing fetches what the screen shows unless it is cached, already on its way,

@@ -15,7 +15,7 @@ const (
 	// Rows around the lists: title, status line, blank, pane title, search line, blank, help, and
 	// the newline that ends the screen.
 	pickerChromeHeight = 8
-	minPickerRows      = 3
+	minPickerRows      = 5 // room for a heading and a few rows under it
 
 	paneGap     = "    "
 	loadingText = "Loading…"
@@ -58,7 +58,7 @@ func (m WatchPickerModel) helpText() string {
 	case m.focusedPane == providersPane:
 		return "↑/↓ move · tab switch pane · / filter providers · r refresh · s save · esc cancel"
 	}
-	return "↑/↓ move · tab switch pane · space watch or unwatch · / filter components · r refresh · s save · esc cancel"
+	return "↑/↓ move · tab switch pane · space watch or unwatch · g toggle group · / filter components · r refresh · s save · esc cancel"
 }
 
 func (m WatchPickerModel) visibleRowCount() int {
@@ -141,7 +141,7 @@ func (m WatchPickerModel) componentLines() []string {
 		return []string{errorStyle.Render(errorMessage(err)), mutedStyle.Render("Press r to try again.")}
 	}
 	all, loaded := m.providerComponents()
-	visible := filterComponents(all, m.componentsFilter.query)
+	visible := m.visibleComponents()
 	switch {
 	case !loaded:
 		return []string{loadingText}
@@ -153,27 +153,44 @@ func (m WatchPickerModel) componentLines() []string {
 	return m.componentRows(visible)
 }
 
-func (m WatchPickerModel) componentRows(components []api.Component) []string {
-	nameWidth, groupWidth, statusWidth := columnWidths(components)
-	start, end := visibleRange(len(components), m.componentIndex, m.visibleRowCount())
+// componentRows draws the ordered components under their group headings, scrolled so the row
+// under the cursor is in view; the headings take rows like any other line.
+func (m WatchPickerModel) componentRows(ordered []api.Component) []string {
+	lines := groupLines(ordered, func(component api.Component) bool { return m.selection.isChosen(keyOf(component)) })
+	nameWidth, statusWidth := columnWidths(ordered)
+	start, end := visibleRange(len(lines), lineOfComponent(lines, m.componentIndex), m.visibleRowCount())
 	rows := make([]string, 0, end-start)
-	for index := start; index < end; index++ {
-		rows = append(rows, m.componentRow(components[index], index == m.componentIndex, nameWidth, groupWidth, statusWidth))
+	for _, line := range lines[start:end] {
+		if line.isHeading {
+			rows = append(rows, headingRow(line))
+			continue
+		}
+		rows = append(rows, m.componentRow(ordered[line.componentIndex], line.componentIndex == m.componentIndex, nameWidth, statusWidth))
 	}
 	return rows
 }
 
-func (m WatchPickerModel) componentRow(component api.Component, isCursor bool, nameWidth, groupWidth, statusWidth int) string {
+// lineOfComponent is the position among the lines of the component at index.
+func lineOfComponent(lines []componentLine, index int) int {
+	for position, line := range lines {
+		if !line.isHeading && line.componentIndex == index {
+			return position
+		}
+	}
+	return 0
+}
+
+func headingRow(line componentLine) string {
+	return noSelectionMarker + titleStyle.Render(line.groupName) + columnGap +
+		mutedStyle.Render(fmt.Sprintf("%d/%d watched", line.chosen, line.total))
+}
+
+func (m WatchPickerModel) componentRow(component api.Component, isCursor bool, nameWidth, statusWidth int) string {
 	marker, name := noSelectionMarker, fmt.Sprintf("%-*s", nameWidth, component.Name)
 	if isCursor && m.focusedPane == componentsPane {
 		marker, name = selectionMarker, selectedStyle.Render(name)
 	}
-	group := ""
-	if component.GroupName != nil {
-		group = *component.GroupName
-	}
-	return marker + watchMarker(m.selection.stateOf(keyOf(component))) + " " + name + columnGap +
-		mutedStyle.Render(fmt.Sprintf("%-*s", groupWidth, group)) + columnGap + renderStatus(component.Status, statusWidth)
+	return marker + watchMarker(m.selection.stateOf(keyOf(component))) + " " + name + columnGap + renderStatus(component.Status, statusWidth)
 }
 
 // watchMarker shows whether a component is watched, will be, will stop being, or is not.
@@ -189,15 +206,12 @@ func watchMarker(state watchState) string {
 	return mutedStyle.Render("[ ]")
 }
 
-func columnWidths(components []api.Component) (nameWidth, groupWidth, statusWidth int) {
+func columnWidths(components []api.Component) (nameWidth, statusWidth int) {
 	for _, component := range components {
 		nameWidth = max(nameWidth, lipgloss.Width(component.Name))
-		if component.GroupName != nil {
-			groupWidth = max(groupWidth, lipgloss.Width(*component.GroupName))
-		}
 		statusWidth = max(statusWidth, lipgloss.Width(statusLabel(component.Status)))
 	}
-	return nameWidth, groupWidth, statusWidth
+	return nameWidth, statusWidth
 }
 
 func paneTitle(title string, isFocused bool) string {

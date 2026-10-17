@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -92,6 +93,7 @@ var (
 	keyK      = tea.KeyPressMsg{Code: 'k', Text: "k"}
 	keyR      = tea.KeyPressMsg{Code: 'r', Text: "r"}
 	keyS      = tea.KeyPressMsg{Code: 's', Text: "s"}
+	keyG      = tea.KeyPressMsg{Code: 'g', Text: "g"}
 	keySlash  = tea.KeyPressMsg{Code: '/', Text: "/"}
 	keyCtrlC  = tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 )
@@ -206,12 +208,10 @@ func TestProvidersShowHowManyOfTheAppsComponentsTheyContribute(t *testing.T) {
 
 	view := plain(t, m.View().Content)
 
-	if !strings.Contains(view, "GitHub     2 watched") && !strings.Contains(view, "GitHub  2 watched") {
-		// The gap depends on the widest provider name, so match the pair loosely.
-		assertViewContains(t, view, "2 watched", "1 watched")
-	}
-	if strings.Count(view, "watched") != 2 {
-		t.Fatalf("want one count per provider that has watched components:\n%s", view)
+	for _, want := range []string{`GitHub\s+2 watched`, `Cloudflare\s+1 watched`} {
+		if !regexp.MustCompile(want).MatchString(view) {
+			t.Errorf("view missing %q:\n%s", want, view)
+		}
 	}
 }
 
@@ -1057,4 +1057,193 @@ func TestMovingPastTheEndsOfTheProvidersDoesNothing(t *testing.T) {
 	if atTheTop != nil || atTheBottom != nil {
 		t.Fatal("a cursor that did not move must not start a settle timer")
 	}
+}
+
+// groupedCatalog has GitHub components in two groups plus one without a group, and a Cloudflare
+// with no groups at all.
+func groupedCatalog() fakeProviderCatalog {
+	core, developer := stringPtr("Core"), stringPtr("Developer")
+	return fakeProviderCatalog{
+		providers: []api.Provider{{Name: "GitHub", Slug: "github"}, {Name: "Cloudflare", Slug: "cloudflare"}},
+		components: map[string][]api.Component{
+			// In the order the API sends them: by name.
+			"github": {
+				namedComponent("github", "api", "API Requests", core),
+				namedComponent("github", "git", "Git Operations", core),
+				namedComponent("github", "pages", "Pages", nil),
+				namedComponent("github", "hooks", "Webhooks", developer),
+			},
+			"cloudflare": {namedComponent("cloudflare", "cdn", "CDN", nil)},
+		},
+	}
+}
+
+func groupedPicker(watched ...api.Component) WatchPickerModel {
+	return pickerOnComponents(fakePickerBackend{fakeProviderCatalog: groupedCatalog()}, watched...)
+}
+
+func pressTimes(m WatchPickerModel, key tea.KeyPressMsg, times int) WatchPickerModel {
+	for range times {
+		m, _ = m.Update(key)
+	}
+	return m
+}
+
+func TestComponentsAreListedUnderGroupHeadingsWithTheUngroupedLast(t *testing.T) {
+	view := plain(t, groupedPicker().View().Content)
+
+	assertViewContains(t, view, "Core  0/2 watched", "Developer  0/1 watched", "Ungrouped  0/1 watched")
+	core, developer, ungrouped := strings.Index(view, "Core  0/2"), strings.Index(view, "Developer  0/1"), strings.Index(view, "Ungrouped  0/1")
+	if core >= developer || developer >= ungrouped {
+		t.Fatalf("headings out of order (%d, %d, %d):\n%s", core, developer, ungrouped, view)
+	}
+	if strings.Index(view, "API Requests") > developer || strings.Index(view, "Pages") < ungrouped {
+		t.Fatalf("components are not under their headings:\n%s", view)
+	}
+}
+
+func TestAProviderWithoutGroupsHasNoHeadings(t *testing.T) {
+	m := moveToProvider(openedPicker(fakePickerBackend{fakeProviderCatalog: groupedCatalog()}), keyJ)
+
+	assertViewContains(t, m.View().Content, "Cloudflare components", "CDN")
+	assertViewLacks(t, m.View().Content, "Ungrouped", "0/1 watched")
+}
+
+func TestARowDoesNotRepeatItsGroupNameTheHeadingSaysIt(t *testing.T) {
+	for _, line := range strings.Split(plain(t, groupedPicker().View().Content), "\n") {
+		if strings.Contains(line, "API Requests") && strings.Contains(line, "Core") {
+			t.Fatalf("a component row carries its group: %q", line)
+		}
+	}
+}
+
+func TestTheCursorSkipsTheHeadings(t *testing.T) {
+	m := groupedPicker()
+	assertViewContains(t, m.View().Content, "▸ [ ] API Requests")
+
+	m = pressTimes(m, keyJ, 2)
+	assertViewContains(t, m.View().Content, "▸ [ ] Webhooks")
+	m = pressTimes(m, keyJ, 1)
+	assertViewContains(t, m.View().Content, "▸ [ ] Pages")
+	m = pressTimes(m, keyJ, 5)
+	assertViewContains(t, m.View().Content, "▸ [ ] Pages")
+	m = pressTimes(m, keyK, 2)
+	assertViewContains(t, m.View().Content, "▸ [ ] Git Operations")
+}
+
+func TestAHeadingCountsTheComponentsChosenInItsGroup(t *testing.T) {
+	m := groupedPicker()
+
+	m, _ = m.Update(keySpace)
+
+	assertViewContains(t, m.View().Content, "Core  1/2 watched")
+}
+
+func TestGTogglesTheWholeGroupAndAgainBringsItBack(t *testing.T) {
+	m := groupedPicker()
+
+	m, _ = m.Update(keyG)
+	assertViewContains(t, m.View().Content, "[+] API Requests", "[+] Git Operations", "Core  2/2 watched", "2 changes not saved yet")
+	assertViewLacks(t, m.View().Content, "[+] Webhooks")
+	m, _ = m.Update(keyG)
+
+	assertViewContains(t, m.View().Content, "[ ] API Requests", "[ ] Git Operations", "Core  0/2 watched")
+	assertViewLacks(t, m.View().Content, "not saved yet")
+}
+
+func TestGChoosesTheRestOfAGroupThatIsPartlyChosen(t *testing.T) {
+	m := groupedPicker(component("github", "api"))
+
+	m, _ = m.Update(keyG)
+
+	assertViewContains(t, m.View().Content, "[x] API Requests", "[+] Git Operations", "Core  2/2 watched", "1 change not saved yet")
+}
+
+func TestGUnchoosesAGroupThatIsFullyWatched(t *testing.T) {
+	m := groupedPicker(component("github", "api"), component("github", "git"))
+
+	m, _ = m.Update(keyG)
+
+	assertViewContains(t, m.View().Content, "[-] API Requests", "[-] Git Operations", "Core  0/2 watched", "2 changes not saved yet")
+}
+
+func TestGActsOnlyOnTheComponentsAFilterLetsThrough(t *testing.T) {
+	m := groupedPicker()
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "oper") // Git Operations only; API Requests is in the same group but hidden
+	m, _ = m.Update(keyEnter)
+
+	m, _ = m.Update(keyG)
+	m, _ = m.Update(keySlash)
+	m, _ = m.Update(keyEscape)
+
+	assertViewContains(t, m.View().Content, "[+] Git Operations", "[ ] API Requests", "Core  1/2 watched")
+}
+
+func TestGDoesNothingOutsideTheComponentsPane(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: groupedCatalog()})
+
+	m, _ = m.Update(keyG)
+
+	assertViewLacks(t, m.View().Content, "not saved yet")
+}
+
+func TestGBeforeTheComponentsHaveLoadedDoesNothing(t *testing.T) {
+	backend := fakePickerBackend{fakeProviderCatalog: groupedCatalog()}
+	m := newTestPicker(backend)
+	m, _ = m.Update(providersLoadedMsg{providers: backend.providers})
+	m, _ = m.Update(keyTab)
+
+	m, _ = m.Update(keyG)
+
+	assertViewContains(t, m.View().Content, "Loading…")
+	assertViewLacks(t, m.View().Content, "not saved yet")
+}
+
+func TestSavingAfterGSendsTheWholeSetIncludingOtherGroupsAndProviders(t *testing.T) {
+	var saved [][]api.ComponentRef
+	backend := fakePickerBackend{fakeProviderCatalog: groupedCatalog(), fakeWatchedComponentsSetter: fakeWatchedComponentsSetter{saved: &saved}}
+	m := pickerOnComponents(backend, component("github", "hooks"), component("cloudflare", "cdn"))
+	m, _ = m.Update(keyG)
+
+	_, cmd := m.Update(keyS)
+	cmd()
+
+	want := []api.ComponentRef{{Provider: "cloudflare", ID: "cdn"}, {Provider: "github", ID: "api"}, {Provider: "github", ID: "git"}, {Provider: "github", ID: "hooks"}}
+	if len(saved) != 1 || !reflect.DeepEqual(saved[0], want) {
+		t.Fatalf("saved = %+v, want %+v", saved, want)
+	}
+}
+
+func TestTheFilterRegroupsItsResults(t *testing.T) {
+	m := groupedPicker()
+	m, _ = m.Update(keySlash)
+
+	m = typeIntoPicker(m, "core")
+
+	assertViewContains(t, m.View().Content, "Core  0/2 watched", "API Requests", "Git Operations")
+	assertViewLacks(t, m.View().Content, "Developer", "Ungrouped", "Pages")
+}
+
+func TestAGroupedListScrollsWithTheCursorAndTheHeadingsTakeRows(t *testing.T) {
+	catalog := fakeProviderCatalog{
+		providers:  []api.Provider{{Name: "Big", Slug: "big"}},
+		components: map[string][]api.Component{"big": nil},
+	}
+	for _, group := range []string{"A", "B", "C"} {
+		for index := range 6 {
+			id := fmt.Sprintf("%s%d", strings.ToLower(group), index)
+			catalog.components["big"] = append(catalog.components["big"], namedComponent("big", id, group+fmt.Sprint(index), stringPtr(group)))
+		}
+	}
+	m := NewWatchPickerModel(fakePickerBackend{fakeProviderCatalog: catalog}, newTestCache(), openWatchPickerMsg{appSlug: "x", appName: "X"}, 100, 13)
+	m = settle(m, m.Init())
+	m, _ = m.Update(keyTab)
+	assertViewContains(t, m.View().Content, "A  0/6 watched", "A0")
+	assertViewLacks(t, m.View().Content, "C5")
+
+	m = pressTimes(m, keyJ, 17)
+
+	assertViewContains(t, m.View().Content, "▸ [ ] C5")
+	assertViewLacks(t, m.View().Content, "A0")
 }
