@@ -20,6 +20,7 @@ type fakeProviderCatalog struct {
 	providersErr  error
 	componentsErr error
 	listings      *[]componentListing
+	queries       *[]string
 }
 
 func (f fakeProviderCatalog) ListProviders(context.Context) ([]api.Provider, error) {
@@ -30,7 +31,10 @@ func (f fakeProviderCatalog) ListProviders(context.Context) ([]api.Provider, err
 // contains it, ignoring case.
 func (f fakeProviderCatalog) ListProviderComponents(_ context.Context, providerSlug, query string) ([]api.Component, error) {
 	if f.listings != nil {
-		*f.listings = append(*f.listings, componentListing{providerSlug: providerSlug, query: query})
+		*f.listings = append(*f.listings, componentListing{providerSlug: providerSlug})
+	}
+	if f.queries != nil && query != "" {
+		*f.queries = append(*f.queries, query)
 	}
 	if f.componentsErr != nil {
 		return nil, f.componentsErr
@@ -69,7 +73,10 @@ type fakePickerBackend struct {
 func testCatalog() fakeProviderCatalog {
 	core := stringPtr("Core")
 	return fakeProviderCatalog{
-		providers: []api.Provider{{Name: "GitHub", Slug: "github"}, {Name: "Cloudflare", Slug: "cloudflare"}},
+		providers: []api.Provider{
+			{Name: "GitHub", Slug: "github", Category: "Developer Tools"},
+			{Name: "Cloudflare", Slug: "cloudflare", Category: "Cloud Infrastructure"},
+		},
 		components: map[string][]api.Component{
 			"github":     {namedComponent("github", "api", "API Requests", core), namedComponent("github", "pages", "Pages", nil)},
 			"cloudflare": {namedComponent("cloudflare", "cdn", "CDN", nil)},
@@ -337,59 +344,6 @@ func TestEscapeAsksBeforeDiscardingChangesAndAnyOtherKeyCancelsTheQuestion(t *te
 	if _, ok := confirmed().(closeWatchPickerMsg); !ok {
 		t.Fatal("the second esc in a row discards")
 	}
-}
-
-func TestSearchSendsTheQueryOnEnter(t *testing.T) {
-	var listings []componentListing
-	backend := fakePickerBackend{fakeProviderCatalog: testCatalog()}
-	backend.listings = &listings
-	m := openedPicker(backend)
-
-	m, _ = m.Update(keySlash)
-	m = typeIntoPicker(m, "pag")
-	m, cmd := m.Update(keyEnter)
-	m = settle(m, cmd)
-
-	view := m.View().Content
-	assertViewContains(t, view, "Search: pag", "Pages")
-	assertViewLacks(t, view, "API Requests")
-	want := []componentListing{{providerSlug: "github"}, {providerSlug: "github", query: "pag"}}
-	if !reflect.DeepEqual(listings, want) {
-		t.Fatalf("listings = %+v, want %+v", listings, want)
-	}
-}
-
-func TestEscapeInTheSearchClearsItWithoutAskingTheAPIAgain(t *testing.T) {
-	var listings []componentListing
-	backend := fakePickerBackend{fakeProviderCatalog: testCatalog()}
-	backend.listings = &listings
-	m := openedPicker(backend)
-	m, _ = m.Update(keySlash)
-	m = typeIntoPicker(m, "pag")
-	m, cmd := m.Update(keyEnter)
-	m = settle(m, cmd)
-
-	m, _ = m.Update(keySlash)
-	m, cmd = m.Update(keyEscape)
-
-	if cmd != nil {
-		t.Fatal("the unfiltered list is cached")
-	}
-	assertViewContains(t, m.View().Content, "API Requests")
-	assertViewLacks(t, m.View().Content, "Search: pag")
-}
-
-func TestASearchOfOnlySpacesIsNoSearch(t *testing.T) {
-	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
-	m, _ = m.Update(keySlash)
-	m = typeIntoPicker(m, "   ")
-
-	m, cmd := m.Update(keyEnter)
-
-	if cmd != nil {
-		t.Fatal("an empty search is the cached full list")
-	}
-	assertViewLacks(t, m.View().Content, "Search:")
 }
 
 func TestLettersTypedIntoTheSearchBoxAreTextNotShortcuts(t *testing.T) {
@@ -689,4 +643,268 @@ func TestReopeningThePickerReusesWhatTheCacheAlreadyHolds(t *testing.T) {
 		t.Fatal("everything the second picker shows is already cached")
 	}
 	assertViewContains(t, second.View().Content, "GitHub", "Cloudflare", "API Requests")
+}
+
+func TestSlashOnTheProvidersFiltersThemLiveWithoutAskingTheAPI(t *testing.T) {
+	var listings []componentListing
+	catalog := testCatalog()
+	catalog.listings = &listings
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: catalog})
+	asked := len(listings)
+
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "cloud")
+
+	view := m.View().Content
+	assertViewContains(t, view, "Cloudflare components", "▸ Cloudflare")
+	assertViewLacks(t, view, "GitHub")
+	if len(listings) != asked {
+		t.Fatalf("filtering asked the API: %+v", listings[asked:])
+	}
+}
+
+func TestTheProviderFilterMatchesSlugAndCategoryToo(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+
+	m = typeIntoPicker(m, "dev")
+	assertViewContains(t, m.View().Content, "GitHub")
+	assertViewLacks(t, m.View().Content, "Cloudflare")
+	m = typeIntoPicker(m, "zzz")
+
+	assertViewContains(t, m.View().Content, "No providers match.")
+}
+
+func TestOnlyTheProviderWhereTheCursorLandsIsFetchedAfterTheSettleDelay(t *testing.T) {
+	var listings []componentListing
+	catalog := catalogOf(87)
+	catalog.listings = &listings
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: catalog})
+	asked := len(listings)
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "p8")
+
+	m, fetch := settleCursor(m)
+	m = settle(m, fetch)
+
+	if got := listings[asked:]; len(got) != 1 || got[0].providerSlug != "p80" {
+		t.Fatalf("fetched %+v after typing p8", got)
+	}
+	assertViewContains(t, m.View().Content, "p80 components")
+}
+
+func TestEnterKeepsTheProviderFilterAndTheKeysWorkAgain(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "c")
+
+	m, _ = m.Update(keyEnter)
+
+	assertViewContains(t, m.View().Content, "Filter: c (esc clears)", "Cloudflare")
+	assertViewLacks(t, m.View().Content, "GitHub")
+	m, fetch := settleCursor(m)
+	m = settle(m, fetch)
+	m, _ = m.Update(keyTab)
+	m, _ = m.Update(keySpace)
+	assertViewContains(t, m.View().Content, "[+] CDN", "1 change not saved yet")
+}
+
+func TestEscapeInTheProviderFilterClearsItAndPutsTheCursorOnTheFirstProvider(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "cloud")
+	m, _ = m.Update(keyEnter)
+
+	m, _ = m.Update(keySlash)
+	m, _ = m.Update(keyEscape)
+
+	assertViewContains(t, m.View().Content, "GitHub", "Cloudflare", "▸ GitHub")
+	assertViewLacks(t, m.View().Content, "Filter:")
+}
+
+func TestLettersTypedIntoTheProviderFilterAreTextNotShortcuts(t *testing.T) {
+	var saved [][]api.ComponentRef
+	backend := fakePickerBackend{fakeProviderCatalog: testCatalog(), fakeWatchedComponentsSetter: fakeWatchedComponentsSetter{saved: &saved}}
+	m := openedPicker(backend, component("github", "api"))
+	m, _ = m.Update(keySlash)
+
+	var cmds []tea.Cmd
+	for _, r := range "sqrj" {
+		var cmd tea.Cmd
+		m, cmd = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+		cmds = append(cmds, cmd)
+	}
+
+	for _, cmd := range cmds {
+		for _, msg := range collectMessages(cmd) {
+			switch msg.(type) {
+			case watchedComponentsSavedMsg, saveWatchedComponentsFailedMsg, tea.QuitMsg, closeWatchPickerMsg:
+				t.Fatalf("typing triggered %#v", msg)
+			}
+		}
+	}
+	if m.providerFilter.Value() != "sqrj" || len(saved) != 0 || m.isSaving {
+		t.Fatalf("filter = %q, saved = %+v", m.providerFilter.Value(), saved)
+	}
+}
+
+func TestSlashOnTheComponentsStillSearchesComponentsNotProviders(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+
+	if m.isFilteringProviders || !m.isSearching {
+		t.Fatalf("isFilteringProviders = %v, isSearching = %v", m.isFilteringProviders, m.isSearching)
+	}
+	assertViewContains(t, m.View().Content, "GitHub", "Cloudflare")
+}
+
+func TestKeysAreHarmlessWhenTheFilterLeavesNoProviders(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()}, component("github", "api"))
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "zzz")
+	m, _ = m.Update(keyEnter)
+
+	for _, key := range []tea.KeyPressMsg{keyJ, keyK, keyTab, keySpace, keyR, keyEnter} {
+		m, _ = m.Update(key)
+	}
+
+	assertViewContains(t, m.View().Content, "No providers match.")
+}
+
+func TestTheProviderPaneStaysTheSameWidthWhileFiltering(t *testing.T) {
+	// Names longer than the pane's minimum width decide its width; filtering them away must not
+	// make the pane jump while the user types.
+	catalog := fakeProviderCatalog{
+		providers:  []api.Provider{{Name: strings.Repeat("L", 40), Slug: "long"}, {Name: "Short", Slug: "short"}},
+		components: map[string][]api.Component{},
+	}
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: catalog})
+	wide := m.providersWidth()
+
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "short")
+
+	if wide <= minProvidersWidth || m.providersWidth() != wide {
+		t.Fatalf("width went from %d to %d (minimum %d): the pane would jump while the user types", wide, m.providersWidth(), minProvidersWidth)
+	}
+}
+
+func TestSearchFiltersTheComponentsAsTheUserTypesWithoutAskingTheAPI(t *testing.T) {
+	var listings []componentListing
+	var queries []string
+	catalog := testCatalog()
+	catalog.listings, catalog.queries = &listings, &queries
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: catalog})
+	asked := len(listings)
+
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "p")
+	assertViewContains(t, m.View().Content, "API Requests", "Pages")
+	m = typeIntoPicker(m, "ag")
+
+	view := m.View().Content
+	assertViewContains(t, view, "/ pag", "Pages")
+	assertViewLacks(t, view, "API Requests")
+	if len(listings) != asked || len(queries) != 0 {
+		t.Fatalf("searching asked the API: listings %+v, queries %v", listings[asked:], queries)
+	}
+}
+
+func TestSearchMatchesTheGroupNameIgnoringCase(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+
+	m = typeIntoPicker(m, "CORE")
+
+	assertViewContains(t, m.View().Content, "API Requests")
+	assertViewLacks(t, m.View().Content, "Pages")
+}
+
+func TestEnterKeepsTheComponentSearchAndSpaceActsOnTheFilteredRow(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+
+	m, _ = m.Update(keyEnter)
+	m, _ = m.Update(keySpace)
+
+	assertViewContains(t, m.View().Content, "[+] Pages", "1 change not saved yet")
+	assertViewLacks(t, m.View().Content, "API Requests")
+}
+
+func TestEscapeInTheSearchBringsAllTheComponentsBackWithoutAskingTheAPI(t *testing.T) {
+	var listings []componentListing
+	catalog := testCatalog()
+	catalog.listings = &listings
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: catalog})
+	asked := len(listings)
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+
+	m, cmd := m.Update(keyEscape)
+
+	if cmd != nil || len(listings) != asked {
+		t.Fatal("clearing a search must not ask the API")
+	}
+	assertViewContains(t, m.View().Content, "API Requests", "Pages")
+	assertViewLacks(t, m.View().Content, "Search:")
+}
+
+func TestASearchOfOnlySpacesIsNoSearch(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+
+	m = typeIntoPicker(m, "   ")
+
+	assertViewContains(t, m.View().Content, "API Requests", "Pages")
+	assertViewLacks(t, m.View().Content, "Search:")
+}
+
+func TestASearchWithNoMatchSaysSo(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+
+	m = typeIntoPicker(m, "zzz")
+
+	assertViewContains(t, m.View().Content, "No components match.")
+}
+
+func TestTheCursorGoesToTheFirstMatchWhileTyping(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keyJ)
+	m, _ = m.Update(keySlash)
+
+	m = typeIntoPicker(m, "a")
+
+	assertViewContains(t, m.View().Content, "▸ [ ] API Requests")
+}
+
+func TestASearchBelongsToTheProviderItWasTypedFor(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+	m, _ = m.Update(keyEnter)
+	m, _ = m.Update(keyTab)
+
+	m = moveToProvider(m, keyJ)
+
+	assertViewContains(t, m.View().Content, "Cloudflare components", "CDN")
+	assertViewLacks(t, m.View().Content, "Search:", "No components match.")
+}
+
+func TestSearchingBeforeTheComponentsHaveLoadedFiltersThemWhenTheyArrive(t *testing.T) {
+	backend := fakePickerBackend{fakeProviderCatalog: testCatalog()}
+	m := newTestPicker(backend)
+	m, _ = m.Update(providersLoadedMsg{providers: backend.providers})
+	m, _ = m.Update(keyTab)
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+	assertViewContains(t, m.View().Content, "Loading…")
+
+	m, _ = m.Update(providerComponentsLoadedMsg{listing: componentListing{providerSlug: "github"}, components: backend.components["github"]})
+
+	assertViewContains(t, m.View().Content, "Pages")
+	assertViewLacks(t, m.View().Content, "API Requests")
 }

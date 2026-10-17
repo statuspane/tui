@@ -10,10 +10,10 @@ import (
 // rarely, but the statuses shown next to components do, so nothing is kept forever.
 const cacheLifetime = 5 * time.Minute
 
-// componentListing names one list of components: a provider's, optionally narrowed by a search.
+// componentListing names one list of components: a provider's, in full. Searching narrows it on
+// screen without asking again.
 type componentListing struct {
 	providerSlug string
-	query        string
 }
 
 type cachedComponents struct {

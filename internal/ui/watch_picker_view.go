@@ -52,10 +52,15 @@ func changesText(count int) string {
 }
 
 func (m WatchPickerModel) helpText() string {
-	if m.isSearching {
-		return "⏎ search · esc clear"
+	switch {
+	case m.isSearching:
+		return "type to filter · ⏎ keep · esc clear"
+	case m.isFilteringProviders:
+		return "type to filter · ⏎ keep · esc clear"
+	case m.focusedPane == providersPane:
+		return "↑/↓ move · tab switch pane · / filter providers · r refresh · s save · esc cancel"
 	}
-	return "↑/↓ move · tab switch pane · space watch or unwatch · / search · r refresh · s save · esc cancel"
+	return "↑/↓ move · tab switch pane · space watch or unwatch · / search components · r refresh · s save · esc cancel"
 }
 
 func (m WatchPickerModel) visibleRowCount() int {
@@ -63,17 +68,28 @@ func (m WatchPickerModel) visibleRowCount() int {
 }
 
 func (m WatchPickerModel) providersView() string {
-	// The blank line keeps the rows level with the components, which have a search line above them.
-	lines := []string{paneTitle("Providers", m.focusedPane == providersPane), ""}
+	lines := []string{paneTitle("Providers", m.focusedPane == providersPane), m.providerFilterLine()}
 	switch {
 	case m.providersErr != nil:
 		lines = append(lines, errorStyle.Render(errorMessage(m.providersErr)))
 	case !m.providersLoaded:
 		lines = append(lines, loadingText)
+	case len(m.visibleProviders()) == 0:
+		lines = append(lines, "No providers match.")
 	default:
 		lines = append(lines, m.providerRows()...)
 	}
 	return lipgloss.NewStyle().Width(m.providersWidth()).Render(strings.Join(lines, "\n"))
+}
+
+func (m WatchPickerModel) providerFilterLine() string {
+	switch {
+	case m.isFilteringProviders:
+		return m.providerFilter.View()
+	case m.providerQuery != "":
+		return mutedStyle.Render("Filter: " + m.providerQuery + " (esc clears)")
+	}
+	return mutedStyle.Render("/ to filter providers")
 }
 
 func (m WatchPickerModel) providerNameWidth() int {
@@ -104,10 +120,11 @@ func (m WatchPickerModel) watchedText(provider api.Provider) string {
 
 func (m WatchPickerModel) providerRows() []string {
 	nameWidth := m.providerNameWidth()
-	start, end := visibleRange(len(m.providers), m.providerIndex, m.visibleRowCount())
+	providers := m.visibleProviders()
+	start, end := visibleRange(len(providers), m.providerIndex, m.visibleRowCount())
 	rows := make([]string, 0, end-start)
 	for index := start; index < end; index++ {
-		provider := m.providers[index]
+		provider := providers[index]
 		marker, name := noSelectionMarker, fmt.Sprintf("%-*s", nameWidth, provider.Name)
 		if index == m.providerIndex {
 			marker, name = selectionMarker, selectedStyle.Render(name)
@@ -135,8 +152,8 @@ func (m WatchPickerModel) searchLine() string {
 	switch {
 	case m.isSearching:
 		return m.search.View()
-	case m.query != "":
-		return mutedStyle.Render("Search: " + m.query + "  (/ to change, esc inside to clear)")
+	case m.componentQuery != "":
+		return mutedStyle.Render("Search: " + m.componentQuery + "  (/ to change, esc inside to clear)")
 	}
 	return mutedStyle.Render("/ to search by name or group")
 }
@@ -154,10 +171,10 @@ func (m WatchPickerModel) componentsPlaceholder() ([]string, bool) {
 	switch {
 	case !loaded:
 		return []string{loadingText}, true
-	case len(components) == 0 && listing.query != "":
-		return []string{"No components match."}, true
 	case len(components) == 0:
 		return []string{"This provider has no components."}, true
+	case len(filterComponents(components, m.componentQuery)) == 0:
+		return []string{"No components match."}, true
 	}
 	return nil, false
 }

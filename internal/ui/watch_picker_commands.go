@@ -45,7 +45,8 @@ func fetchProviderComponents(catalog ProviderCatalog, listing componentListing) 
 		ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 		defer cancel()
 
-		components, err := catalog.ListProviderComponents(ctx, listing.providerSlug, listing.query)
+		// The whole list is asked for and filtered on screen, so a search costs no request.
+		components, err := catalog.ListProviderComponents(ctx, listing.providerSlug, "")
 		if err != nil {
 			return providerComponentsFailedMsg{listing: listing, err: err}
 		}

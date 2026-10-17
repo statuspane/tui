@@ -34,13 +34,17 @@ type WatchPickerModel struct {
 	providersLoaded bool
 	providersErr    error
 	providerIndex   int
+	providerQuery   string
 
 	cache          *componentCache
 	settleSequence int
 	componentIndex int
-	query          string
+	componentQuery string
 	search         textinput.Model
 	isSearching    bool
+
+	providerFilter       textinput.Model
+	isFilteringProviders bool
 
 	focusedPane       pickerPane
 	isSaving          bool
@@ -56,6 +60,8 @@ type WatchPickerModel struct {
 func NewWatchPickerModel(backend WatchPickerBackend, cache *componentCache, open openWatchPickerMsg, width, height int) WatchPickerModel {
 	search := textinput.New()
 	search.Prompt = "/ "
+	providerFilter := textinput.New()
+	providerFilter.Prompt = "/ "
 	providers, hasProviders := cache.cachedProviders()
 	return WatchPickerModel{
 		backend:         backend,
@@ -66,6 +72,7 @@ func NewWatchPickerModel(backend WatchPickerBackend, cache *componentCache, open
 		providersLoaded: hasProviders,
 		cache:           cache,
 		search:          search,
+		providerFilter:  providerFilter,
 		width:           width,
 		height:          height,
 	}
@@ -116,12 +123,15 @@ func (m WatchPickerModel) Update(msg tea.Msg) (WatchPickerModel, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.isSearching {
-		var cmd tea.Cmd
+	// Messages the text box in use is waiting for, such as the cursor blinking.
+	var cmd tea.Cmd
+	switch {
+	case m.isSearching:
 		m.search, cmd = m.search.Update(msg)
-		return m, cmd
+	case m.isFilteringProviders:
+		m.providerFilter, cmd = m.providerFilter.Update(msg)
 	}
-	return m, nil
+	return m, cmd
 }
 
 func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel, tea.Cmd) {
@@ -133,6 +143,9 @@ func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel,
 	}
 	if m.isSearching {
 		return m.handleSearchKey(keyPress)
+	}
+	if m.isFilteringProviders {
+		return m.handleProviderFilterKey(keyPress)
 	}
 
 	wasConfirmingDiscard := m.confirmingDiscard
@@ -154,6 +167,11 @@ func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel,
 	case "space":
 		return m.toggleComponentAtCursor(), nil
 	case "/":
+		// The key searches the pane that has the focus: providers are filtered where they are,
+		// components are searched on the server.
+		if m.focusedPane == providersPane {
+			return m.startProviderFilter()
+		}
 		return m.startSearch()
 	case "r":
 		return m.refresh()
@@ -173,28 +191,34 @@ func (m WatchPickerModel) cancelOrConfirmDiscard(wasConfirmingDiscard bool) (Wat
 	return m, nil
 }
 
+// handleSearchKey filters the provider's components live, as the user types. The list is already
+// in memory, so no request is made.
 func (m WatchPickerModel) handleSearchKey(keyPress tea.KeyPressMsg) (WatchPickerModel, tea.Cmd) {
 	switch keyPress.String() {
 	case "enter":
-		return m.applySearch(strings.TrimSpace(m.search.Value()))
+		m.isSearching = false
+		m.search.Blur()
+		return m, nil
 	case "esc":
+		m.isSearching = false
 		m.search.SetValue("")
-		return m.applySearch("")
+		m.search.Blur()
+		return m.withComponentQuery(""), nil
 	}
 	var cmd tea.Cmd
 	m.search, cmd = m.search.Update(keyPress)
-	return m, cmd
+	return m.withComponentQuery(strings.TrimSpace(m.search.Value())), cmd
 }
 
-func (m WatchPickerModel) applySearch(query string) (WatchPickerModel, tea.Cmd) {
-	m.query, m.isSearching, m.componentIndex = query, false, 0
-	m.search.Blur()
-	return m, m.fetchListingIfMissing()
+// withComponentQuery filters the components on screen and puts the cursor on the first match.
+func (m WatchPickerModel) withComponentQuery(query string) WatchPickerModel {
+	m.componentQuery, m.componentIndex = query, 0
+	return m
 }
 
 func (m WatchPickerModel) startSearch() (WatchPickerModel, tea.Cmd) {
 	m.focusedPane, m.isSearching = componentsPane, true
-	m.search.SetValue(m.query)
+	m.search.SetValue(m.componentQuery)
 	return m, m.search.Focus()
 }
 
@@ -211,13 +235,14 @@ func (m WatchPickerModel) moveCursor(step int) (WatchPickerModel, tea.Cmd) {
 		m.componentIndex = clampIndex(m.componentIndex, step, len(m.currentComponents()))
 		return m, nil
 	}
-	m.providerIndex = clampIndex(m.providerIndex, step, len(m.providers))
+	previous := m.providerIndex
+	m.providerIndex = clampIndex(m.providerIndex, step, len(m.visibleProviders()))
 	m.componentIndex = 0
-	m.settleSequence++
-	sequence := m.settleSequence
-	return m, tea.Tick(providerSettleDelay, func(time.Time) tea.Msg {
-		return providerSettledMsg{sequence: sequence}
-	})
+	if m.providerIndex != previous {
+		// A search belongs to the provider it was typed for.
+		m = m.withComponentQuery("")
+	}
+	return m.scheduleSettle()
 }
 
 // refresh asks again for what is on screen: the provider list if that failed, else the selected
@@ -249,26 +274,27 @@ func (m WatchPickerModel) toggleComponentAtCursor() WatchPickerModel {
 }
 
 func (m WatchPickerModel) providerAtCursor() (api.Provider, bool) {
-	if m.providerIndex >= len(m.providers) {
+	providers := m.visibleProviders()
+	if m.providerIndex >= len(providers) {
 		return api.Provider{}, false
 	}
-	return m.providers[m.providerIndex], true
+	return providers[m.providerIndex], true
 }
 
 func (m WatchPickerModel) currentListing() (componentListing, bool) {
 	provider, ok := m.providerAtCursor()
-	return componentListing{providerSlug: provider.Slug, query: m.query}, ok
+	return componentListing{providerSlug: provider.Slug}, ok
 }
 
-// currentComponents are the cached components for the provider and search on screen; nil while
-// they are still loading.
+// currentComponents are the selected provider's cached components that match the search on
+// screen; nil while they are still loading.
 func (m WatchPickerModel) currentComponents() []api.Component {
 	listing, ok := m.currentListing()
 	if !ok {
 		return nil
 	}
 	components, _ := m.cache.lookup(listing)
-	return components
+	return filterComponents(components, m.componentQuery)
 }
 
 // fetchListingIfMissing fetches what the screen shows unless it is cached, already on its way, or

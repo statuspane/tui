@@ -75,12 +75,12 @@ func TestAnAnswerClearsAnEarlierFailure(t *testing.T) {
 	}
 }
 
-func TestPendingIsPerListing(t *testing.T) {
+func TestPendingIsPerProvider(t *testing.T) {
 	cache := newTestCache()
 
 	cache.markPending(github)
 
-	if cache.isPending(componentListing{providerSlug: "github", query: "api"}) || cache.isPending(componentListing{providerSlug: "cloudflare"}) {
-		t.Fatal("a search and another provider are different listings")
+	if cache.isPending(componentListing{providerSlug: "cloudflare"}) {
+		t.Fatal("another provider is another listing")
 	}
 }
