@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -15,6 +16,8 @@ type fakeBackend struct {
 	fakeAppGetter
 	fakeAppCreator
 	fakeAppDeleter
+	fakeProviderCatalog
+	fakeWatchedComponentsSetter
 }
 
 func sendRoot(m RootModel, msg tea.Msg) (RootModel, tea.Cmd) {
@@ -234,5 +237,93 @@ func TestCtrlCQuitsFromADialog(t *testing.T) {
 
 	if _, ok := cmd().(tea.QuitMsg); !ok {
 		t.Fatal("want tea.QuitMsg")
+	}
+}
+
+func rootOnLoadedDetail() RootModel {
+	m := loadedRoot(api.App{Name: "Web App", Slug: "web-app"})
+	m, _ = sendRoot(m, openAppMsg{slug: "web-app", name: "Web App"})
+	m, _ = sendRoot(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+	return m
+}
+
+func TestWOpensThePickerForTheAppOnScreen(t *testing.T) {
+	m := rootOnLoadedDetail()
+
+	m, cmd := sendRoot(m, tea.KeyPressMsg{Code: 'w', Text: "w"})
+	opened, ok := cmd().(openWatchPickerMsg)
+	if !ok || opened.appSlug != "web-app" || len(opened.watchedComponents) != 2 {
+		t.Fatalf("got %#v", opened)
+	}
+	m, _ = sendRoot(m, opened)
+
+	if m.picker == nil || !strings.Contains(m.View().Content, "Watch components") {
+		t.Fatalf("view = %q", m.View().Content)
+	}
+}
+
+func TestThePickerLoadsItsProvidersThroughTheRoot(t *testing.T) {
+	m := rootOnLoadedDetail()
+	m, _ = sendRoot(m, openWatchPickerMsg{appSlug: "web-app", appName: "Web App"})
+
+	m, _ = sendRoot(m, providersLoadedMsg{providers: testCatalog().providers})
+
+	if view := m.View().Content; !strings.Contains(view, "GitHub") || !strings.Contains(view, "Cloudflare") {
+		t.Fatalf("view = %q", view)
+	}
+}
+
+func TestKeysGoOnlyToThePickerWhileItIsOpen(t *testing.T) {
+	m := loadedRoot(api.App{Name: "Web App", Slug: "web-app"}, api.App{Name: "Other", Slug: "other"})
+	m, _ = sendRoot(m, tea.WindowSizeMsg{Width: 100, Height: 12})
+	m, _ = sendRoot(m, openAppMsg{slug: "web-app", name: "Web App"})
+	tall := degradedAppDetail()
+	for index := range 30 {
+		tall.WatchedComponents = append(tall.WatchedComponents, component("github", fmt.Sprintf("extra-%02d", index)))
+	}
+	m, _ = sendRoot(m, appDetailLoadedMsg{appDetail: tall})
+	detailBefore := m.View().Content
+	m, _ = sendRoot(m, openWatchPickerMsg{appSlug: "web-app", appName: "Web App"})
+	m, _ = sendRoot(m, providersLoadedMsg{providers: testCatalog().providers})
+
+	m, _ = sendRoot(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+	m, _ = sendRoot(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+	m, _ = sendRoot(m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	assertViewContains(t, m.View().Content, "Cloudflare components")
+
+	m, _ = sendRoot(m, closeWatchPickerMsg{})
+	if m.dialog != nil {
+		t.Fatal("d must not open the delete dialog from the picker")
+	}
+	if m.View().Content != detailBefore {
+		t.Fatalf("keys leaked to the screen behind the picker:\nbefore: %q\nafter:  %q", detailBefore, m.View().Content)
+	}
+}
+
+func TestEscThroughTheRootClosesThePickerAndShowsTheDetailAgain(t *testing.T) {
+	m := rootOnLoadedDetail()
+	m, _ = sendRoot(m, openWatchPickerMsg{appSlug: "web-app", appName: "Web App"})
+
+	m, cmd := sendRoot(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	m, _ = sendRoot(m, cmd())
+
+	if m.picker != nil || !strings.Contains(m.View().Content, "Git operations degraded") {
+		t.Fatalf("view = %q", m.View().Content)
+	}
+}
+
+func TestASavedSetClosesThePickerUpdatesTheDetailAndReloadsTheList(t *testing.T) {
+	m := rootOnLoadedDetail()
+	m, _ = sendRoot(m, openWatchPickerMsg{appSlug: "web-app", appName: "Web App"})
+	saved := degradedAppDetail()
+	saved.WatchedComponents = append(saved.WatchedComponents, namedComponent("github", "actions", "Actions Runner", nil))
+
+	m, cmd := sendRoot(m, watchedComponentsSavedMsg{appDetail: saved})
+
+	if m.picker != nil || !strings.Contains(m.detail.viewport.GetContent(), "Actions Runner") {
+		t.Fatalf("picker open = %v", m.picker != nil)
+	}
+	if !containsAppsChanged(collectMessages(cmd)) {
+		t.Fatal("the list must be told to reload")
 	}
 }
