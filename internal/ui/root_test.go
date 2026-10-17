@@ -92,33 +92,6 @@ func TestDetailLoadsThroughTheRoot(t *testing.T) {
 	}
 }
 
-// collectMessages runs a command that returns immediately, flattening batches. Don't use it on
-// a command that includes a tea.Tick: that one sleeps for its whole duration.
-func collectMessages(cmd tea.Cmd) []tea.Msg {
-	if cmd == nil {
-		return nil
-	}
-	msg := cmd()
-	batch, isBatch := msg.(tea.BatchMsg)
-	if !isBatch {
-		return []tea.Msg{msg}
-	}
-	var messages []tea.Msg
-	for _, inner := range batch {
-		messages = append(messages, collectMessages(inner)...)
-	}
-	return messages
-}
-
-func containsAppsChanged(messages []tea.Msg) bool {
-	for _, msg := range messages {
-		if _, ok := msg.(appsChangedMsg); ok {
-			return true
-		}
-	}
-	return false
-}
-
 func TestNOpensTheCreateDialogInPlaceOfTheList(t *testing.T) {
 	m := loadedRoot(api.App{Name: "First", Slug: "first"})
 
