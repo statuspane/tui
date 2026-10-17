@@ -34,6 +34,12 @@ type AppLister interface {
 // openAppMsg asks the root model to show one app's detail screen.
 type openAppMsg struct{ slug, name string }
 
+// openCreateAppDialogMsg asks the root model to show the dialog that creates an app.
+type openCreateAppDialogMsg struct{}
+
+// appsChangedMsg tells the list its data is stale: an app was created or deleted.
+type appsChangedMsg struct{}
+
 type appsLoadedMsg struct{ apps []api.App }
 
 type appsFailedMsg struct{ err error }
@@ -50,6 +56,7 @@ type AppsModel struct {
 	isLoading       bool
 	selectedIndex   int
 	refreshSequence int
+	reloadAfterLoad bool
 	spinner         spinner.Model
 }
 
@@ -69,11 +76,20 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case appsLoadedMsg:
 		m.apps, m.err, m.hasLoaded, m.isLoading = msg.apps, nil, true, false
 		m.selectedIndex = min(m.selectedIndex, max(len(m.apps)-1, 0))
-		return m.scheduleRefresh()
+		return m.reloadOrScheduleRefresh()
 
 	case appsFailedMsg:
 		m.err, m.isLoading = msg.err, false
-		return m.scheduleRefresh()
+		return m.reloadOrScheduleRefresh()
+
+	case appsChangedMsg:
+		if m.isLoading {
+			// The fetch in flight may predate the change; load again as soon as it lands.
+			m.reloadAfterLoad = true
+			return m, nil
+		}
+		m.refreshSequence++
+		return m.startRefresh()
 
 	case refreshTickMsg:
 		if msg.sequence != m.refreshSequence || m.isLoading {
@@ -103,6 +119,16 @@ func (m AppsModel) handleKey(keyPress tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		app := m.apps[m.selectedIndex]
 		return m, func() tea.Msg { return openAppMsg{slug: app.Slug, name: app.Name} }
+	case "n":
+		return m, func() tea.Msg { return openCreateAppDialogMsg{} }
+	case "d":
+		if len(m.apps) == 0 {
+			return m, nil
+		}
+		app := m.apps[m.selectedIndex]
+		return m, func() tea.Msg {
+			return openDeleteAppDialogMsg{slug: app.Slug, name: app.Name, componentCount: app.WatchedComponentsCount}
+		}
 	case "r":
 		if m.isLoading {
 			return m, nil
@@ -122,6 +148,15 @@ func (m AppsModel) fetchCmd() tea.Cmd {
 	return tea.Batch(m.spinner.Tick, fetchApps(m.appLister))
 }
 
+func (m AppsModel) reloadOrScheduleRefresh() (tea.Model, tea.Cmd) {
+	if m.reloadAfterLoad {
+		m.reloadAfterLoad = false
+		m.refreshSequence++
+		return m.startRefresh()
+	}
+	return m.scheduleRefresh()
+}
+
 func (m AppsModel) scheduleRefresh() (tea.Model, tea.Cmd) {
 	m.refreshSequence++
 	sequence := m.refreshSequence
@@ -134,7 +169,7 @@ func (m AppsModel) View() tea.View {
 	screen := titleStyle.Render("StatusPane") + "\n\n" +
 		m.body() +
 		m.statusLines() +
-		"\n" + mutedStyle.Render("↑/↓ move · enter open · r refresh · q quit") + "\n"
+		"\n" + mutedStyle.Render("↑/↓ move · enter open · n new · d delete · r refresh · q quit") + "\n"
 	return tea.NewView(screen)
 }
 
@@ -145,7 +180,7 @@ func (m AppsModel) body() string {
 	case !m.hasLoaded:
 		return m.spinner.View() + " Loading apps…\n"
 	case len(m.apps) == 0:
-		return "No apps yet.\n"
+		return "No apps yet. Press n to create one.\n"
 	}
 	return m.appRows()
 }

@@ -193,3 +193,23 @@ func TestDetailScrollsWhenContentIsTallerThanTheWindow(t *testing.T) {
 		t.Fatalf("YOffset = %d, want 1", m.viewport.YOffset())
 	}
 }
+
+func TestDetailDAsksToDeleteTheApp(t *testing.T) {
+	m := newTestDetailModel()
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+
+	_, cmd := sendDetail(m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+
+	request, ok := cmd().(openDeleteAppDialogMsg)
+	if !ok || request.slug != "web-app" || request.name != "Web App" || request.componentCount != 2 {
+		t.Fatalf("got %#v", request)
+	}
+}
+
+func TestDetailDDoesNothingBeforeTheAppHasLoaded(t *testing.T) {
+	_, cmd := sendDetail(newTestDetailModel(), tea.KeyPressMsg{Code: 'd', Text: "d"})
+
+	if cmd != nil {
+		t.Fatal("want no command")
+	}
+}

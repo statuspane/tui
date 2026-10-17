@@ -124,6 +124,12 @@ func (m AppDetailModel) handleKey(keyPress tea.KeyPressMsg) (AppDetailModel, tea
 		m.viewport.PageUp()
 	case "pgdown":
 		m.viewport.PageDown()
+	case "d":
+		if !m.hasLoaded {
+			return m, nil
+		}
+		request := openDeleteAppDialogMsg{slug: m.slug, name: m.name, componentCount: len(m.appDetail.WatchedComponents)}
+		return m, func() tea.Msg { return request }
 	case "r":
 		if m.isLoading {
 			return m, nil
@@ -153,7 +159,7 @@ func (m AppDetailModel) scheduleRefresh() (AppDetailModel, tea.Cmd) {
 
 func (m AppDetailModel) View() tea.View {
 	title := titleStyle.Render("StatusPane") + mutedStyle.Render(" › ") + titleStyle.Render(m.name)
-	help := mutedStyle.Render("↑/↓ scroll · r refresh · esc back · q quit")
+	help := mutedStyle.Render("↑/↓ scroll · d delete · r refresh · esc back · q quit")
 	return tea.NewView(title + "\n" + m.statusLine() + "\n" + m.viewport.View() + "\n\n" + help + "\n")
 }
 
