@@ -6,6 +6,10 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-17
+
+Manage apps from the TUI: create and delete them, and choose which components they watch.
+
 ### Added
 
 - Choose the components an app watches: press `w` on the app screen, pick a provider, and mark
@@ -44,5 +48,6 @@ components an app watches are not here yet.
 - Plain explanations for the common failures: a missing API key prints an example config file,
   a rejected key names the setting to check, and a rate limit says how long to wait.
 
-[Unreleased]: https://github.com/statuspane/tui/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/statuspane/tui/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/statuspane/tui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/statuspane/tui/releases/tag/v0.1.0
