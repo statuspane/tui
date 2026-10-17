@@ -48,6 +48,13 @@ detail, or a dialog (`createAppDialog`, `deleteAppDialog`) instead of any of the
   filters trim and lower-case the query themselves, so the box and the match always agree. A
   component filter belongs to the provider it was typed for: `landOnProvider` clears it. What a
   save sends is the chosen set, not what the filters show, so a hidden watched component stays.
+- Components are shown under group headings, but the list the cursor, `space`, `g`, the filter
+  and the save work on stays flat: `visibleComponents()` is the filtered list put in group order
+  by `orderedByGroup` (groups alphabetical, no group last, API order inside a group), and the
+  headings are only drawn by `groupLines`, which has no say in what the cursor can reach. A
+  provider where nothing has a group gets no headings. `g` acts on the visible members of the
+  group (`groupBounds`), never on components a filter hides. Never sort or reorder the cached
+  slice: `filterComponents` can hand back the cache's own slice, and `orderedByGroup` copies it.
 - The API allows 60 requests a minute per key and the catalog has 87 providers, so the picker
   must not ask on every cursor move. Moving over a provider only schedules a
   `providerSettledMsg` (`providerSettleDelay`, with a sequence number like the refresh ticks);

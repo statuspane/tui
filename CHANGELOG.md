@@ -8,6 +8,11 @@ All notable user-facing changes are listed here. The format follows
 
 ### Added
 
+- A provider's components in the picker are listed under their group, with how many of the
+  group's components are chosen (`Core Services  2/5 watched`); components without a group come
+  last under "Ungrouped", and a provider with no groups looks as before. `g` watches or unwatches
+  the whole group under the cursor, or, with a filter on, the components of it you can see.
+
 - Filter the providers in the component picker: with the provider list focused, `/` narrows it as
   you type to the providers whose name, slug or category contains the text (`dev` finds GitHub
   through Developer Tools). `enter` keeps the filter and `esc` clears it. Filtering makes no
