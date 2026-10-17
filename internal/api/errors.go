@@ -10,10 +10,19 @@ import (
 
 // Error codes the API answers with.
 const (
-	CodeUnauthorized = "unauthorized"
-	CodeRateLimited  = "rate_limited"
-	CodeNotFound     = "not_found"
+	CodeUnauthorized     = "unauthorized"
+	CodeRateLimited      = "rate_limited"
+	CodeNotFound         = "not_found"
+	CodeValidationFailed = "validation_failed"
 )
+
+// FieldError is one rejected request field of a validation_failed response: Field is the
+// request field (`name`, `watched_components[3]`) and Code says why in a stable form.
+type FieldError struct {
+	Field   string `json:"field"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
 
 // APIError is a non-2xx response. Code and Message come from the API's error body
 // and are empty when the response wasn't in that shape.
@@ -21,6 +30,7 @@ type APIError struct {
 	Status     int
 	Code       string
 	Message    string
+	Details    []FieldError
 	RetryAfter time.Duration
 }
 
@@ -39,13 +49,15 @@ func decodeError(resp *http.Response) *APIError {
 
 	var body struct {
 		Error struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
+			Code    string       `json:"code"`
+			Message string       `json:"message"`
+			Details []FieldError `json:"details"`
 		} `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err == nil {
 		apiErr.Code = body.Error.Code
 		apiErr.Message = body.Error.Message
+		apiErr.Details = body.Error.Details
 	}
 	return apiErr
 }
