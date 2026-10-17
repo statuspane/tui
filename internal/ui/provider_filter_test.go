@@ -23,6 +23,7 @@ func TestFilterProvidersMatchesNameSlugAndCategoryIgnoringCase(t *testing.T) {
 		{"by slug", "gcp", []string{"Google Cloud"}},
 		{"by category", "infrastructure", []string{"Cloudflare", "Google Cloud"}},
 		{"matches inside a word", "hub", []string{"GitHub"}},
+		{"ignores surrounding spaces", "  git  ", []string{"GitHub"}},
 		{"no match", "zzz", nil},
 	}
 	for _, tc := range cases {

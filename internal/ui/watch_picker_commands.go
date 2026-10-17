@@ -40,17 +40,20 @@ func fetchProviders(catalog ProviderCatalog) tea.Cmd {
 	}
 }
 
-func fetchProviderComponents(catalog ProviderCatalog, listing componentListing) tea.Cmd {
+// allComponents is the empty query that asks for a provider's whole list: the picker filters it
+// on screen, so a search costs no request.
+const allComponents = ""
+
+func fetchProviderComponents(catalog ProviderCatalog, providerSlug string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 		defer cancel()
 
-		// The whole list is asked for and filtered on screen, so a search costs no request.
-		components, err := catalog.ListProviderComponents(ctx, listing.providerSlug, "")
+		components, err := catalog.ListProviderComponents(ctx, providerSlug, allComponents)
 		if err != nil {
-			return providerComponentsFailedMsg{listing: listing, err: err}
+			return providerComponentsFailedMsg{providerSlug: providerSlug, err: err}
 		}
-		return providerComponentsLoadedMsg{listing: listing, components: components}
+		return providerComponentsLoadedMsg{providerSlug: providerSlug, components: components}
 	}
 }
 

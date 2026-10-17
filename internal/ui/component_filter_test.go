@@ -23,6 +23,7 @@ func TestFilterComponentsMatchesNameAndGroupIgnoringCase(t *testing.T) {
 		{"by name, any case", "PAGES", []string{"Pages"}},
 		{"by group", "core serv", []string{"API Requests", "Git Operations"}},
 		{"inside a word", "equest", []string{"API Requests"}},
+		{"ignores surrounding spaces", " pages ", []string{"Pages"}},
 		{"no match", "zzz", nil},
 	}
 	for _, tc := range cases {

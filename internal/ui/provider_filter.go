@@ -1,22 +1,18 @@
 package ui
 
-import (
-	"strings"
-
-	"github.com/statuspane/tui/internal/api"
-)
+import "github.com/statuspane/tui/internal/api"
 
 // filterProviders keeps the providers whose name, slug or category contains the query, ignoring
-// case. An empty query keeps them all.
+// case and surrounding spaces. An empty query keeps them all, and then the result is the input
+// slice itself: do not modify it.
 func filterProviders(providers []api.Provider, query string) []api.Provider {
-	query = strings.ToLower(query)
+	query = normalizeQuery(query)
 	if query == "" {
 		return providers
 	}
 	var matches []api.Provider
 	for _, provider := range providers {
-		haystack := strings.ToLower(provider.Name + "\n" + provider.Slug + "\n" + provider.Category)
-		if strings.Contains(haystack, query) {
+		if anyFieldContains(query, provider.Name, provider.Slug, provider.Category) {
 			matches = append(matches, provider)
 		}
 	}

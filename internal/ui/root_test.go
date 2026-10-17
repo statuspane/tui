@@ -329,7 +329,7 @@ func TestASavedSetClosesThePickerUpdatesTheDetailAndReloadsTheList(t *testing.T)
 }
 
 func TestAnswersThatArriveAfterThePickerClosedAreKeptNotLostAsPending(t *testing.T) {
-	var listings []componentListing
+	var listings []string
 	catalog := testCatalog()
 	catalog.listings = &listings
 	m := NewRootModel(fakeBackend{fakeProviderCatalog: catalog})

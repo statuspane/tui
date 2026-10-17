@@ -37,26 +37,28 @@ detail, or a dialog (`createAppDialog`, `deleteAppDialog`) instead of any of the
   chosen set, including components of providers that were never opened; never build the request
   from what is on screen. `componentRefs()` is never nil, because an empty selection must reach
   the API as `[]`.
-- `/` filters the pane that has the focus, live and in memory, so typing makes no request. On the
-  providers it is `filterProviders` (name, slug, category), kept in `providerQuery`; the cursor
-  moves over `visibleProviders()`, never over `providers` directly, and the pane's width comes
-  from the full list so it does not jump while the user types. On the components it is
-  `filterComponents` (name or group, the rule the API applies to its own `q`), kept in
-  `componentQuery` and applied by `currentComponents()` over the provider's full cached list.
-  The TUI never sends `q`; a search belongs to the provider it was typed for and is cleared when
-  the provider changes. While a search box has focus every key is text; `enter` keeps the filter
-  and `esc` clears it.
+- `/` filters the pane that has the focus, live and in memory, so typing makes no request. Each
+  pane has a `paneFilter` (`providersFilter`, `componentsFilter`): the text box, the query kept in
+  it and whether it has the focus. While a box has the focus every key is text; `enter` keeps the
+  query, `esc` clears it. Providers are narrowed by `filterProviders` (name, slug, category) and
+  the cursor moves over `visibleProviders()`, never over `providers` directly; the pane's width
+  comes from the full list so it does not jump while the user types. Components are narrowed by
+  `filterComponents` (name or group, the rule the API applies to its own `q`) over the provider's
+  full cached list, and the cursor moves over `visibleComponents()`. The TUI never sends `q`. The
+  filters trim and lower-case the query themselves, so the box and the match always agree. A
+  component filter belongs to the provider it was typed for: `landOnProvider` clears it. What a
+  save sends is the chosen set, not what the filters show, so a hidden watched component stays.
 - The API allows 60 requests a minute per key and the catalog has 87 providers, so the picker
   must not ask on every cursor move. Moving over a provider only schedules a
   `providerSettledMsg` (`providerSettleDelay`, with a sequence number like the refresh ticks);
   the fetch happens when the cursor has rested there.
 - Answers live in a `componentCache` owned by `RootModel` and shared by every picker opened
-  during the run: keyed by `componentListing` (the provider), trusted for
+  during the run: keyed by the provider's slug, trusted for
   `cacheLifetime`, and also holding the provider list. It records requests in flight (so going
   back to a provider before its answer lands asks nothing) and failures (a refused request, such
   as a 429, is not repeated by visiting again; `r` asks again). The root files answers that
   arrive after the picker closed (`keepAnswerWithoutPicker`); otherwise a listing would stay
-  pending for good. A response carries its listing, so one for a provider the user already left
+  pending for good. A response names its provider, so one for a provider the user already left
   is cached but not shown.
 - The picker's `esc` asks first when there are unsaved changes (a second `esc` discards), and
   is ignored while a save is in flight, for the same reason as the dialogs.

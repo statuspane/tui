@@ -24,16 +24,16 @@ type providersFailedMsg struct{ err error }
 // tells a settle from an older cursor position apart from the current one.
 type providerSettledMsg struct{ sequence int }
 
-// The responses carry their listing, so one that arrives after the user moved on lands in the
+// The responses name their provider, so one that arrives after the user moved on lands in the
 // cache without disturbing what is on screen.
 type providerComponentsLoadedMsg struct {
-	listing    componentListing
-	components []api.Component
+	providerSlug string
+	components   []api.Component
 }
 
 type providerComponentsFailedMsg struct {
-	listing componentListing
-	err     error
+	providerSlug string
+	err          error
 }
 
 type saveWatchedComponentsFailedMsg struct{ err error }

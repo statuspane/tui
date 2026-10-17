@@ -1,26 +1,23 @@
 package ui
 
-import (
-	"strings"
-
-	"github.com/statuspane/tui/internal/api"
-)
+import "github.com/statuspane/tui/internal/api"
 
 // filterComponents keeps the components whose name or group name contains the query, ignoring
-// case: the rule the API applies to its own search, so a search needs no request once the
-// provider's list is in memory. An empty query keeps them all.
+// case and surrounding spaces: the rule the API applies to its own search, so a search can be
+// answered from a list already in memory. An empty query keeps them all, and then the result is
+// the input slice itself: do not modify it.
 func filterComponents(components []api.Component, query string) []api.Component {
-	query = strings.ToLower(query)
+	query = normalizeQuery(query)
 	if query == "" {
 		return components
 	}
 	var matches []api.Component
 	for _, component := range components {
-		haystack := component.Name
+		group := ""
 		if component.GroupName != nil {
-			haystack += "\n" + *component.GroupName
+			group = *component.GroupName
 		}
-		if strings.Contains(strings.ToLower(haystack), query) {
+		if anyFieldContains(query, component.Name, group) {
 			matches = append(matches, component)
 		}
 	}
