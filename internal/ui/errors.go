@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/statuspane/tui/internal/api"
@@ -34,6 +35,19 @@ func fieldErrorMessage(err error, field string) string {
 				return detail.Message
 			}
 		}
+	}
+	return errorMessage(err)
+}
+
+// validationMessage joins the API's messages about each rejected field, or gives the general text.
+func validationMessage(err error) string {
+	var apiErr *api.APIError
+	if errors.As(err, &apiErr) && len(apiErr.Details) > 0 {
+		messages := make([]string, len(apiErr.Details))
+		for index, detail := range apiErr.Details {
+			messages[index] = detail.Message
+		}
+		return strings.Join(messages, "; ")
 	}
 	return errorMessage(err)
 }
