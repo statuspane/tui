@@ -216,3 +216,69 @@ func TestStatusColumnsAlignWhenStyled(t *testing.T) {
 		}
 	}
 }
+
+func TestNAsksForTheCreateDialog(t *testing.T) {
+	_, cmd := send(newTestAppsModel(), tea.KeyPressMsg{Code: 'n', Text: "n"})
+
+	if _, ok := cmd().(openCreateAppDialogMsg); !ok {
+		t.Fatal("want openCreateAppDialogMsg")
+	}
+}
+
+func TestDAsksToDeleteTheSelectedApp(t *testing.T) {
+	m := newTestAppsModel()
+	m, _ = send(m, appsLoadedMsg{apps: []api.App{{Name: "First", Slug: "first"}, {Name: "Second", Slug: "second", WatchedComponentsCount: 3}}})
+	m = pressRune(m, 'j')
+
+	_, cmd := send(m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+
+	request, ok := cmd().(openDeleteAppDialogMsg)
+	if !ok || request.slug != "second" || request.name != "Second" || request.componentCount != 3 {
+		t.Fatalf("got %#v", request)
+	}
+}
+
+func TestDOnAnEmptyListDoesNothing(t *testing.T) {
+	m := newTestAppsModel()
+	m, _ = send(m, appsLoadedMsg{})
+
+	_, cmd := send(m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+
+	if cmd != nil {
+		t.Fatal("want no command")
+	}
+}
+
+func TestAnEmptyListInvitesCreatingAnApp(t *testing.T) {
+	m := newTestAppsModel()
+	m, _ = send(m, appsLoadedMsg{})
+
+	if view := m.View().Content; !strings.Contains(view, "Press n to create one") {
+		t.Fatalf("view = %q", view)
+	}
+}
+
+func TestAppsChangedReloadsAtOnceWhenNothingIsLoading(t *testing.T) {
+	m := newTestAppsModel()
+	m, _ = send(m, appsLoadedMsg{})
+
+	m, cmd := send(m, appsChangedMsg{})
+
+	if cmd == nil || !m.isLoading {
+		t.Fatal("want a reload")
+	}
+}
+
+func TestAppsChangedDuringALoadReloadsRightAfterIt(t *testing.T) {
+	m := newTestAppsModel()
+
+	m, cmd := send(m, appsChangedMsg{})
+	if cmd != nil {
+		t.Fatal("must not start a second fetch while one is running")
+	}
+	m, cmd = send(m, appsLoadedMsg{})
+
+	if cmd == nil || !m.isLoading {
+		t.Fatal("want a reload as soon as the running fetch lands")
+	}
+}

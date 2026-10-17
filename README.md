@@ -44,7 +44,8 @@ in the file, for example to use a local server. Environment variables win over t
 ./statuspane-tui
 ```
 
-`↑/↓` move, `enter` opens an app, `esc` goes back, `r` refreshes, `q` quits.
+`↑/↓` move, `enter` opens an app, `esc` goes back, `n` creates an app, `d` deletes the selected
+app (you type its name to confirm), `r` refreshes, `q` quits.
 
 ## Develop
 

@@ -6,6 +6,13 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Create an app with `n`: a dialog asks for its name (up to 100 characters) and opens the new app.
+- Delete an app with `d`, from the list or from the app screen. The dialog says how many
+  components it stops watching, and you type the app's name to confirm.
+- An empty apps list now says how to create the first app.
+
 ### Changed
 
 - The program is now called `statuspane-tui`. Install it with
