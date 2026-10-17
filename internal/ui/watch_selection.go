@@ -57,6 +57,27 @@ func (s watchSelection) toggled(key componentKey) watchSelection {
 	return watchSelection{baseline: s.baseline, chosen: chosen}
 }
 
+func (s watchSelection) isChosen(key componentKey) bool {
+	return s.chosen[key]
+}
+
+// withChosen returns the selection with every one of the components chosen or not chosen; s is
+// left as it was.
+func (s watchSelection) withChosen(keys []componentKey, chosen bool) watchSelection {
+	next := make(map[componentKey]bool, len(s.chosen)+len(keys))
+	for key := range s.chosen {
+		next[key] = true
+	}
+	for _, key := range keys {
+		if chosen {
+			next[key] = true
+		} else {
+			delete(next, key)
+		}
+	}
+	return watchSelection{baseline: s.baseline, chosen: next}
+}
+
 func (s watchSelection) stateOf(key componentKey) watchState {
 	wasWatched, isChosen := s.baseline[key], s.chosen[key]
 	switch {
