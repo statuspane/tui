@@ -213,3 +213,23 @@ func TestDetailDDoesNothingBeforeTheAppHasLoaded(t *testing.T) {
 		t.Fatal("want no command")
 	}
 }
+
+func TestDetailWAsksForThePickerWithTheCurrentComponents(t *testing.T) {
+	m := newTestDetailModel()
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+
+	_, cmd := sendDetail(m, tea.KeyPressMsg{Code: 'w', Text: "w"})
+
+	request, ok := cmd().(openWatchPickerMsg)
+	if !ok || request.appSlug != "web-app" || request.appName != "Web App" || len(request.watchedComponents) != 2 {
+		t.Fatalf("got %#v", request)
+	}
+}
+
+func TestDetailWDoesNothingBeforeTheAppHasLoaded(t *testing.T) {
+	_, cmd := sendDetail(newTestDetailModel(), tea.KeyPressMsg{Code: 'w', Text: "w"})
+
+	if cmd != nil {
+		t.Fatal("want no command")
+	}
+}

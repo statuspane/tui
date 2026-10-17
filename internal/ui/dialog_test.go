@@ -52,10 +52,6 @@ func pressEnter(d dialog) (dialog, tea.Cmd) {
 	return d.update(tea.KeyPressMsg{Code: tea.KeyEnter})
 }
 
-func apiError(status int, code string, details ...api.FieldError) *api.APIError {
-	return &api.APIError{Status: status, Code: code, Details: details}
-}
-
 func TestCreateDialogDoesNothingOnEnterWhileTheNameIsBlank(t *testing.T) {
 	d := newTestCreateDialog(fakeAppCreator{})
 

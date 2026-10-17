@@ -8,6 +8,12 @@ All notable user-facing changes are listed here. The format follows
 
 ### Added
 
+- Choose the components an app watches: press `w` on the app screen, pick a provider, and mark
+  components with `space`. Search a provider's components by name or group with `/`; the search
+  covers one provider at a time. Nothing changes until you save with `s`, and `esc` asks before
+  throwing changes away. To stay within the API's rate limit, the picker loads a provider's
+  components only once the cursor rests on it, remembers what it loaded for five minutes (also
+  when you reopen it), and asks again for a provider only when you press `r`.
 - Create an app with `n`: a dialog asks for its name (up to 100 characters) and opens the new app.
 - Delete an app with `d`, from the list or from the app screen. The dialog says how many
   components it stops watching, and you type the app's name to confirm.
