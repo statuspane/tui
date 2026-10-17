@@ -53,6 +53,9 @@ func (d createAppDialog) handleKey(keyPress tea.KeyPressMsg) (dialog, tea.Cmd) {
 	case "ctrl+c":
 		return d, tea.Quit
 	case "esc":
+		if d.isSubmitting {
+			return d, nil
+		}
 		return d, closeDialog
 	case "enter":
 		name := strings.TrimSpace(d.input.Value())

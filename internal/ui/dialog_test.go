@@ -206,3 +206,25 @@ func TestComponentsText(t *testing.T) {
 		t.Fatal("wrong pluralisation")
 	}
 }
+
+func TestDialogsIgnoreEscapeWhileARequestIsInFlight(t *testing.T) {
+	cases := []struct {
+		name      string
+		open      func() dialog
+		validText string
+	}{
+		{"create", func() dialog { return newTestCreateDialog(fakeAppCreator{}) }, "Storefront"},
+		{"delete", func() dialog { return newTestDeleteDialog(fakeAppDeleter{}) }, "Web App"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d, _ := pressEnter(typeText(tc.open(), tc.validText))
+
+			_, cmd := d.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+
+			if cmd != nil {
+				t.Fatal("closing now would leave the result with no dialog to report to")
+			}
+		})
+	}
+}
