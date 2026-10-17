@@ -80,18 +80,6 @@ func TestCreateDialogSendsTheTrimmedNameAndReportsTheNewApp(t *testing.T) {
 	}
 }
 
-func TestCreateDialogSendsOnlyOneRequestForADoubleEnter(t *testing.T) {
-	d := newTestCreateDialog(fakeAppCreator{})
-	d = typeText(d, "Storefront")
-	d, first := pressEnter(d)
-
-	_, second := pressEnter(d)
-
-	if first == nil || second != nil {
-		t.Fatalf("first = %v, second = %v", first != nil, second != nil)
-	}
-}
-
 func TestCreateDialogShowsTheAPIsMessageAboutTheNameAndKeepsTheText(t *testing.T) {
 	failure := apiError(400, api.CodeValidationFailed, api.FieldError{Field: "name", Code: "too_long", Message: "Name is too long"})
 	d := newTestCreateDialog(fakeAppCreator{err: failure})
@@ -114,30 +102,6 @@ func TestCreateDialogExplainsOtherFailures(t *testing.T) {
 
 	if view := d.view(); !strings.Contains(view, "connection refused") {
 		t.Fatalf("view = %q", view)
-	}
-}
-
-func TestCreateDialogTreatsQAndJAsText(t *testing.T) {
-	d := newTestCreateDialog(fakeAppCreator{})
-
-	d = typeText(d, "queue")
-
-	if view := d.view(); !strings.Contains(view, "queue") || !strings.Contains(view, "5 / 100") {
-		t.Fatalf("view = %q", view)
-	}
-}
-
-func TestCreateDialogEscapeAndCtrlCKeepTheirMeaning(t *testing.T) {
-	d := newTestCreateDialog(fakeAppCreator{})
-
-	_, escape := d.update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	_, quit := d.update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-
-	if _, ok := escape().(closeDialogMsg); !ok {
-		t.Fatal("esc must close the dialog")
-	}
-	if _, ok := quit().(tea.QuitMsg); !ok {
-		t.Fatal("ctrl+c must quit")
 	}
 }
 
@@ -172,16 +136,6 @@ func TestDeleteDialogEnterDoesNothingUntilTheNameMatches(t *testing.T) {
 	}
 }
 
-func TestDeleteDialogSendsOnlyOneRequestForADoubleEnter(t *testing.T) {
-	d, first := pressEnter(typeText(newTestDeleteDialog(fakeAppDeleter{}), "Web App"))
-
-	_, second := pressEnter(d)
-
-	if first == nil || second != nil {
-		t.Fatalf("first = %v, second = %v", first != nil, second != nil)
-	}
-}
-
 func TestDeleteDialogTreatsAnAppThatIsAlreadyGoneAsDeleted(t *testing.T) {
 	d := typeText(newTestDeleteDialog(fakeAppDeleter{err: apiError(404, api.CodeNotFound)}), "Web App")
 	_, cmd := pressEnter(d)
@@ -201,22 +155,52 @@ func TestDeleteDialogKeepsOpenAndExplainsOtherFailures(t *testing.T) {
 	}
 }
 
-func TestComponentsText(t *testing.T) {
-	if componentsText(1) != "1 component" || componentsText(0) != "0 components" || componentsText(12) != "12 components" {
-		t.Fatal("wrong pluralisation")
+func TestCreateDialogShowsHowLongTheNameIs(t *testing.T) {
+	d := typeText(newTestCreateDialog(fakeAppCreator{}), "Storefront")
+
+	if view := d.view(); !strings.Contains(view, "10 / 100") {
+		t.Fatalf("view = %q", view)
+	}
+}
+
+// The two dialogs share these rules, so one table covers both.
+var dialogCases = []struct {
+	name      string
+	open      func() dialog
+	validText string
+}{
+	{"create", func() dialog { return newTestCreateDialog(fakeAppCreator{}) }, "Storefront"},
+	{"delete", func() dialog { return newTestDeleteDialog(fakeAppDeleter{}) }, "Web App"},
+}
+
+func TestDialogsSendOnlyOneRequestForADoubleEnter(t *testing.T) {
+	for _, tc := range dialogCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d, first := pressEnter(typeText(tc.open(), tc.validText))
+
+			_, second := pressEnter(d)
+
+			if first == nil || second != nil {
+				t.Fatalf("first = %v, second = %v", first != nil, second != nil)
+			}
+		})
+	}
+}
+
+func TestDialogsCloseOnEscape(t *testing.T) {
+	for _, tc := range dialogCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, cmd := tc.open().update(tea.KeyPressMsg{Code: tea.KeyEscape})
+
+			if _, ok := cmd().(closeDialogMsg); !ok {
+				t.Fatal("esc must close the dialog")
+			}
+		})
 	}
 }
 
 func TestDialogsIgnoreEscapeWhileARequestIsInFlight(t *testing.T) {
-	cases := []struct {
-		name      string
-		open      func() dialog
-		validText string
-	}{
-		{"create", func() dialog { return newTestCreateDialog(fakeAppCreator{}) }, "Storefront"},
-		{"delete", func() dialog { return newTestDeleteDialog(fakeAppDeleter{}) }, "Web App"},
-	}
-	for _, tc := range cases {
+	for _, tc := range dialogCases {
 		t.Run(tc.name, func(t *testing.T) {
 			d, _ := pressEnter(typeText(tc.open(), tc.validText))
 
@@ -224,6 +208,48 @@ func TestDialogsIgnoreEscapeWhileARequestIsInFlight(t *testing.T) {
 
 			if cmd != nil {
 				t.Fatal("closing now would leave the result with no dialog to report to")
+			}
+		})
+	}
+}
+
+func TestDialogsQuitOnCtrlC(t *testing.T) {
+	for _, tc := range dialogCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, cmd := tc.open().update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+
+			if _, ok := cmd().(tea.QuitMsg); !ok {
+				t.Fatal("ctrl+c must quit")
+			}
+		})
+	}
+}
+
+func TestDialogsTypeScreenShortcutLettersAsText(t *testing.T) {
+	for _, tc := range dialogCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := typeText(tc.open(), "qjdn")
+
+			if view := d.view(); !strings.Contains(view, "qjdn") {
+				t.Fatalf("view = %q", view)
+			}
+		})
+	}
+}
+
+func TestComponentsText(t *testing.T) {
+	cases := []struct {
+		count int
+		want  string
+	}{
+		{0, "0 components"},
+		{1, "1 component"},
+		{12, "12 components"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.want, func(t *testing.T) {
+			if got := componentsText(tc.count); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})
 	}

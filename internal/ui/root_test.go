@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -147,10 +148,56 @@ func TestEscClosesTheDialogAndShowsTheListAgain(t *testing.T) {
 	m := loadedRoot(api.App{Name: "First", Slug: "first"})
 	m, _ = sendRoot(m, openCreateAppDialogMsg{})
 
-	m, _ = sendRoot(m, closeDialogMsg{})
+	m, cmd := sendRoot(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	m, _ = sendRoot(m, cmd())
 
 	if m.dialog != nil || !strings.Contains(m.View().Content, "First") {
 		t.Fatal("want the list back")
+	}
+}
+
+func typeIntoRoot(m RootModel, text string) RootModel {
+	for _, r := range text {
+		m, _ = sendRoot(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	return m
+}
+
+func TestAFailedCreateShowsTheErrorAndKeepsTheDialogOpen(t *testing.T) {
+	m := NewRootModel(fakeBackend{fakeAppCreator: fakeAppCreator{err: errors.New("connection refused")}})
+	m, _ = sendRoot(m, openCreateAppDialogMsg{})
+	m, cmd := sendRoot(typeIntoRoot(m, "Storefront"), tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	m, _ = sendRoot(m, cmd())
+
+	view := m.View().Content
+	if m.dialog == nil || !strings.Contains(view, "connection refused") || !strings.Contains(view, "Storefront") {
+		t.Fatalf("view = %q", view)
+	}
+}
+
+func TestAFailedDeleteShowsTheErrorAndKeepsTheDialogOpen(t *testing.T) {
+	m := NewRootModel(fakeBackend{fakeAppDeleter: fakeAppDeleter{err: errors.New("connection refused")}})
+	m, _ = sendRoot(m, openDeleteAppDialogMsg{slug: "web-app", name: "Web App", componentCount: 2})
+	m, cmd := sendRoot(typeIntoRoot(m, "Web App"), tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	m, _ = sendRoot(m, cmd())
+
+	if view := m.View().Content; m.dialog == nil || !strings.Contains(view, "connection refused") {
+		t.Fatalf("view = %q", view)
+	}
+}
+
+func TestADialogSurvivesTheListRefreshingBehindIt(t *testing.T) {
+	m := loadedRoot(api.App{Name: "First", Slug: "first"})
+	m, _ = sendRoot(m, openCreateAppDialogMsg{})
+	m = typeIntoRoot(m, "Store")
+
+	m, _ = sendRoot(m, refreshTickMsg{sequence: m.apps.refreshSequence})
+	m, _ = sendRoot(m, appsLoadedMsg{apps: []api.App{{Name: "Other", Slug: "other"}}})
+
+	if view := m.View().Content; m.dialog == nil || !strings.Contains(view, "Store") {
+		t.Fatalf("view = %q", view)
 	}
 }
 

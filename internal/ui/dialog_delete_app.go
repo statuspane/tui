@@ -2,13 +2,11 @@ package ui
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-
-	"github.com/statuspane/tui/internal/api"
 )
 
 // AppDeleter is the one thing the delete dialog needs from the API client; tests pass a fake.
@@ -16,7 +14,17 @@ type AppDeleter interface {
 	DeleteApp(ctx context.Context, appSlug string) error
 }
 
-type appDeleteFailedMsg struct{ err error }
+type openDeleteAppDialogMsg struct {
+	slug           string
+	name           string
+	componentCount int
+}
+
+// appDeletedMsg tells the root model the app is gone; it closes the dialog and, if that app is
+// open, its detail.
+type appDeletedMsg struct{ slug string }
+
+type deleteAppFailedMsg struct{ err error }
 
 // deleteAppDialog asks for the app's name to be typed, because deleting can't be undone.
 type deleteAppDialog struct {
@@ -29,26 +37,26 @@ type deleteAppDialog struct {
 	err            error
 }
 
-func newDeleteAppDialog(appDeleter AppDeleter, request openDeleteAppDialogMsg) (deleteAppDialog, tea.Cmd) {
+func newDeleteAppDialog(appDeleter AppDeleter, msg openDeleteAppDialogMsg) (deleteAppDialog, tea.Cmd) {
 	input := textinput.New()
 	input.Prompt = ""
-	input.Placeholder = request.name
+	input.Placeholder = msg.name
 	input.SetWidth(inputWidth)
-	focus := input.Focus()
+	focusCmd := input.Focus()
 	return deleteAppDialog{
 		appDeleter:     appDeleter,
-		slug:           request.slug,
-		name:           request.name,
-		componentCount: request.componentCount,
+		slug:           msg.slug,
+		name:           msg.name,
+		componentCount: msg.componentCount,
 		input:          input,
-	}, focus
+	}, focusCmd
 }
 
 func (d deleteAppDialog) update(msg tea.Msg) (dialog, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return d.handleKey(msg)
-	case appDeleteFailedMsg:
+	case deleteAppFailedMsg:
 		d.isSubmitting, d.err = false, msg.err
 		return d, nil
 	}
@@ -111,13 +119,15 @@ func deleteApp(appDeleter AppDeleter, appSlug string) tea.Cmd {
 		defer cancel()
 
 		if err := appDeleter.DeleteApp(ctx, appSlug); err != nil && !isNotFound(err) {
-			return appDeleteFailedMsg{err: err}
+			return deleteAppFailedMsg{err: err}
 		}
 		return appDeletedMsg{slug: appSlug}
 	}
 }
 
-func isNotFound(err error) bool {
-	var apiErr *api.APIError
-	return errors.As(err, &apiErr) && apiErr.Code == api.CodeNotFound
+func componentsText(count int) string {
+	if count == 1 {
+		return "1 component"
+	}
+	return fmt.Sprintf("%d components", count)
 }

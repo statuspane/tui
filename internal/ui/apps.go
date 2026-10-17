@@ -3,9 +3,7 @@ package ui
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -14,7 +12,6 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/statuspane/tui/internal/api"
-	"github.com/statuspane/tui/internal/config"
 )
 
 const (
@@ -33,9 +30,6 @@ type AppLister interface {
 
 // openAppMsg asks the root model to show one app's detail screen.
 type openAppMsg struct{ slug, name string }
-
-// openCreateAppDialogMsg asks the root model to show the dialog that creates an app.
-type openCreateAppDialogMsg struct{}
 
 // appsChangedMsg tells the list its data is stale: an app was created or deleted.
 type appsChangedMsg struct{}
@@ -114,18 +108,18 @@ func (m AppsModel) handleKey(keyPress tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		m.selectedIndex = min(m.selectedIndex+1, max(len(m.apps)-1, 0))
 	case "enter":
-		if len(m.apps) == 0 {
+		app, ok := m.selectedApp()
+		if !ok {
 			return m, nil
 		}
-		app := m.apps[m.selectedIndex]
 		return m, func() tea.Msg { return openAppMsg{slug: app.Slug, name: app.Name} }
 	case "n":
 		return m, func() tea.Msg { return openCreateAppDialogMsg{} }
 	case "d":
-		if len(m.apps) == 0 {
+		app, ok := m.selectedApp()
+		if !ok {
 			return m, nil
 		}
-		app := m.apps[m.selectedIndex]
 		return m, func() tea.Msg {
 			return openDeleteAppDialogMsg{slug: app.Slug, name: app.Name, componentCount: app.WatchedComponentsCount}
 		}
@@ -137,6 +131,13 @@ func (m AppsModel) handleKey(keyPress tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.startRefresh()
 	}
 	return m, nil
+}
+
+func (m AppsModel) selectedApp() (api.App, bool) {
+	if len(m.apps) == 0 {
+		return api.App{}, false
+	}
+	return m.apps[m.selectedIndex], true
 }
 
 func (m AppsModel) startRefresh() (tea.Model, tea.Cmd) {
@@ -227,28 +228,4 @@ func fetchApps(appLister AppLister) tea.Cmd {
 		}
 		return appsLoadedMsg{apps: apps}
 	}
-}
-
-func errorMessage(err error) string {
-	var apiErr *api.APIError
-	if errors.As(err, &apiErr) {
-		switch apiErr.Code {
-		case api.CodeUnauthorized:
-			return "The API key was rejected. Check " + config.EnvAPIKey + "."
-		case api.CodeRateLimited:
-			return "Rate limited. Try again in " + secondsText(apiErr.RetryAfter) + "."
-		case api.CodeNotFound:
-			return "Not found. It may have been deleted or renamed."
-		}
-	}
-	return err.Error()
-}
-
-// secondsText rounds up, so a sub-second wait never reads as "0 seconds".
-func secondsText(duration time.Duration) string {
-	seconds := int(math.Ceil(duration.Seconds()))
-	if seconds == 1 {
-		return "1 second"
-	}
-	return fmt.Sprintf("%d seconds", seconds)
 }

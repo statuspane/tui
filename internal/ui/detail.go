@@ -128,8 +128,8 @@ func (m AppDetailModel) handleKey(keyPress tea.KeyPressMsg) (AppDetailModel, tea
 		if !m.hasLoaded {
 			return m, nil
 		}
-		request := openDeleteAppDialogMsg{slug: m.slug, name: m.name, componentCount: len(m.appDetail.WatchedComponents)}
-		return m, func() tea.Msg { return request }
+		msg := openDeleteAppDialogMsg{slug: m.slug, name: m.name, componentCount: len(m.appDetail.WatchedComponents)}
+		return m, func() tea.Msg { return msg }
 	case "r":
 		if m.isLoading {
 			return m, nil
@@ -138,6 +138,11 @@ func (m AppDetailModel) handleKey(keyPress tea.KeyPressMsg) (AppDetailModel, tea
 		return m.startRefresh()
 	}
 	return m, nil
+}
+
+// shows reports whether the screen is on that app, by the slug it currently knows.
+func (m AppDetailModel) shows(appSlug string) bool {
+	return m.slug == appSlug
 }
 
 func (m AppDetailModel) startRefresh() (AppDetailModel, tea.Cmd) {

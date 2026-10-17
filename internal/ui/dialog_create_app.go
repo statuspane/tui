@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -16,7 +17,18 @@ type AppCreator interface {
 	CreateApp(ctx context.Context, name string, refs []api.ComponentRef) (api.AppDetail, error)
 }
 
-type appCreateFailedMsg struct{ err error }
+const (
+	maxAppNameLength = 100
+	nameField        = "name"
+)
+
+// openCreateAppDialogMsg asks the root model to show the dialog that creates an app.
+type openCreateAppDialogMsg struct{}
+
+// appCreatedMsg tells the root model the app exists; it closes the dialog and opens the app.
+type appCreatedMsg struct{ appDetail api.AppDetail }
+
+type createAppFailedMsg struct{ err error }
 
 type createAppDialog struct {
 	appCreator   AppCreator
@@ -31,15 +43,15 @@ func newCreateAppDialog(appCreator AppCreator) (createAppDialog, tea.Cmd) {
 	input.Placeholder = "Storefront"
 	input.CharLimit = maxAppNameLength
 	input.SetWidth(inputWidth)
-	focus := input.Focus()
-	return createAppDialog{appCreator: appCreator, input: input}, focus
+	focusCmd := input.Focus()
+	return createAppDialog{appCreator: appCreator, input: input}, focusCmd
 }
 
 func (d createAppDialog) update(msg tea.Msg) (dialog, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return d.handleKey(msg)
-	case appCreateFailedMsg:
+	case createAppFailedMsg:
 		d.isSubmitting, d.err = false, msg.err
 		return d, nil
 	}
@@ -80,7 +92,7 @@ func (d createAppDialog) view() string {
 		"",
 		mutedStyle.Render("Name"),
 		d.input.View(),
-		mutedStyle.Render(lengthText(length)),
+		mutedStyle.Render(nameLengthText(length)),
 	}
 	switch {
 	case d.isSubmitting:
@@ -99,8 +111,12 @@ func createApp(appCreator AppCreator, name string) tea.Cmd {
 
 		appDetail, err := appCreator.CreateApp(ctx, name, nil)
 		if err != nil {
-			return appCreateFailedMsg{err: err}
+			return createAppFailedMsg{err: err}
 		}
 		return appCreatedMsg{appDetail: appDetail}
 	}
+}
+
+func nameLengthText(length int) string {
+	return fmt.Sprintf("%d / %d", length, maxAppNameLength)
 }

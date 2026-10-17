@@ -39,13 +39,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detail = nil
 		return m, nil
 	case openCreateAppDialogMsg:
-		createDialog, focus := newCreateAppDialog(m.backend)
+		createDialog, focusCmd := newCreateAppDialog(m.backend)
 		m.dialog = createDialog
-		return m, focus
+		return m, focusCmd
 	case openDeleteAppDialogMsg:
-		deleteDialog, focus := newDeleteAppDialog(m.backend, msg)
+		deleteDialog, focusCmd := newDeleteAppDialog(m.backend, msg)
 		m.dialog = deleteDialog
-		return m, focus
+		return m, focusCmd
 	case closeDialogMsg:
 		m.dialog = nil
 		return m, nil
@@ -55,7 +55,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return opened, tea.Batch(openCmd, appsChanged)
 	case appDeletedMsg:
 		m.dialog = nil
-		if m.detail != nil && m.detail.slug == msg.slug {
+		if m.detail != nil && m.detail.shows(msg.slug) {
 			m.detail = nil
 		}
 		return m, appsChanged

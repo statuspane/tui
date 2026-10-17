@@ -25,7 +25,9 @@ Bubble Tea v2 screens: `RootModel` (which screen is showing) → `AppsModel` (li
 - While a dialog is open, `RootModel` sends it every key press and the screens none, so typing
   `q` or `j` into a name can't quit or move the list. Only `ctrl+c` quits.
 - Writes are not idempotent: a dialog ignores `enter` while its request is in flight
-  (`isSubmitting`), and a failed request leaves the dialog open with the typed text.
+  (`isSubmitting`), and a failed request leaves the dialog open with the typed text. It also
+  ignores `esc` then: the success message acts on the root (opens the new app, closes the
+  deleted one's detail) and assumes the dialog is still the one that sent it.
 - `appsChangedMsg` during a fetch can't start a second one, because the first may predate the
   change: `AppsModel` sets `reloadAfterLoad` and fetches again right after it lands.
 - Deleting an app that is already gone (404) counts as success.
