@@ -172,3 +172,9 @@ func TestInputBoxHasItsTextAtBothEnds(t *testing.T) {
 		t.Fatalf("middle = %q", middle)
 	}
 }
+
+func TestPanelCutsALongTitleInsteadOfBreakingTheEdge(t *testing.T) {
+	view := panel(strings.Repeat("T", 50), "x", 24, 3)
+
+	assertEveryLineHasWidth(t, view, 24)
+}

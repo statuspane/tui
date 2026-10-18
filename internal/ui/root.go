@@ -196,12 +196,19 @@ func (m RootModel) View() tea.View {
 	return view
 }
 
+// currentView is the screen that is showing, with the dialog, if one is open, in the middle of it.
 func (m RootModel) currentView() tea.View {
+	screen := m.screenView()
+	if m.dialog == nil {
+		return screen
+	}
+	width, height := withFallbackSize(m.width, m.height)
+	return tea.NewView(centeredOver(screen.Content, m.dialog.view(), width, height))
+}
+
+func (m RootModel) screenView() tea.View {
 	if m.picker != nil {
 		return m.picker.View()
-	}
-	if m.dialog != nil {
-		return tea.NewView(titleStyle.Render("StatusPane") + "\n\n" + m.dialog.view() + "\n")
 	}
 	if m.detail != nil {
 		return m.detail.View()

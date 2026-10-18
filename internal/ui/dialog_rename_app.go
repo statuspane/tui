@@ -6,7 +6,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/statuspane/tui/internal/api"
 )
@@ -89,21 +88,15 @@ func (d renameAppDialog) handleKey(keyPress tea.KeyPressMsg) (dialog, tea.Cmd) {
 }
 
 func (d renameAppDialog) view() string {
-	lines := []string{
-		titleStyle.Render("Rename app"),
-		"",
-		mutedStyle.Render("Name"),
-		d.input.View(),
-		mutedStyle.Render(nameLengthText(d.input.Value())),
-	}
+	lines := []string{mutedStyle.Render("Name"), nameBox(d.input)}
 	switch {
 	case d.isSubmitting:
 		lines = append(lines, "", "Renaming…")
 	case d.err != nil:
-		lines = append(lines, "", errorStyle.Render(fieldErrorMessage(d.err, nameField)))
+		lines = append(lines, "", errorStyle.Render(wrappedText(fieldErrorMessage(d.err, nameField))))
 	}
-	lines = append(lines, "", mutedStyle.Render("⏎ rename · esc cancel"))
-	return renderDialog(colorBlue, lipgloss.JoinVertical(lipgloss.Left, lines...))
+	lines = append(lines, "", dialogHints(renderHint(keyHint{"⏎", "rename"}), renderHint(keyHint{"esc", "cancel"})))
+	return dialogBox(accentDialogLook, "Rename app", lines...)
 }
 
 func renameApp(appRenamer AppRenamer, appSlug, newName string) tea.Cmd {

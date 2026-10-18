@@ -95,6 +95,7 @@ func panelTop(look panelLook, title string, width int) string {
 	if title == "" {
 		return look.border.Render("╭" + strings.Repeat("─", width-borderCells) + "╮")
 	}
+	title = clipTo(title, width-panelTitleFrameWidth)
 	fill := width - panelTitleFrameWidth - lipgloss.Width(title)
 	return look.border.Render("╭─ ") + look.title.Render(title) + look.border.Render(" "+strings.Repeat("─", fill)+"╮")
 }

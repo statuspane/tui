@@ -26,9 +26,15 @@ func sendRoot(m RootModel, msg tea.Msg) (RootModel, tea.Cmd) {
 	return updated.(RootModel), cmd
 }
 
+// The window the root tests open in.
+const (
+	testRootWidth  = 100
+	testRootHeight = 30
+)
+
 func loadedRoot(apps ...api.App) RootModel {
 	m := NewRootModel(fakeBackend{})
-	m, _ = sendRoot(m, tea.WindowSizeMsg{Width: 100, Height: 30})
+	m, _ = sendRoot(m, tea.WindowSizeMsg{Width: testRootWidth, Height: testRootHeight})
 	m, _ = sendRoot(m, appsLoadedMsg{apps: apps})
 	return m
 }
@@ -96,14 +102,12 @@ func TestDetailLoadsThroughTheRoot(t *testing.T) {
 	}
 }
 
-func TestNOpensTheCreateDialogInPlaceOfTheList(t *testing.T) {
+func TestNOpensTheCreateDialogOverTheList(t *testing.T) {
 	m := loadedRoot(api.App{Name: "First", Slug: "first"})
 
 	m, _ = sendRoot(m, openCreateAppDialogMsg{})
 
-	if view := m.View().Content; !strings.Contains(view, "New app") || strings.Contains(view, "First") {
-		t.Fatalf("view = %q", view)
-	}
+	assertViewContains(t, m.View().Content, "New app", "First")
 }
 
 func TestKeysGoToTheOpenDialogNotTheScreenBehindIt(t *testing.T) {
