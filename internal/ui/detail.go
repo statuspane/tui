@@ -134,8 +134,7 @@ func (m AppDetailModel) handleKey(keyPress tea.KeyPressMsg) (AppDetailModel, tea
 		if !m.hasLoaded {
 			return m, nil
 		}
-		msg := openRenameAppDialogMsg{slug: m.slug, name: m.name}
-		return m, func() tea.Msg { return msg }
+		return m, func() tea.Msg { return openRenameAppDialogMsg{slug: m.slug, name: m.name} }
 	case "d":
 		if !m.hasLoaded {
 			return m, nil

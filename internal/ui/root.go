@@ -76,7 +76,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		opened, openCmd := m.openDetail(msg.appDetail.Slug, msg.appDetail.Name)
 		return opened, tea.Batch(openCmd, appsChanged)
 	case appRenamedMsg:
-		return m.closeDialogAfterRename(msg)
+		return m.applyRename(msg)
 	case appDeletedMsg:
 		m.dialog = nil
 		if m.detail != nil && m.detail.shows(msg.slug) {
@@ -146,9 +146,9 @@ func (m RootModel) closePickerAfterSave(msg watchedComponentsSavedMsg) (tea.Mode
 	return m, tea.Batch(cmds...)
 }
 
-// closeDialogAfterRename gives the app screen, if it is on the renamed app, the app as the API now
+// applyRename gives the app screen, if it is on the renamed app, the app as the API now
 // has it, and tells the list, whose row changed.
-func (m RootModel) closeDialogAfterRename(msg appRenamedMsg) (tea.Model, tea.Cmd) {
+func (m RootModel) applyRename(msg appRenamedMsg) (tea.Model, tea.Cmd) {
 	m.dialog = nil
 	cmds := []tea.Cmd{appsChanged}
 	if m.detail != nil && m.detail.shows(msg.previousSlug) {

@@ -353,19 +353,34 @@ func TestAnswersThatArriveAfterThePickerClosedAreKeptNotLostAsPending(t *testing
 }
 
 func TestRenamingTheOpenAppUpdatesItsScreenWithTheNewSlugAndRefreshesTheList(t *testing.T) {
-	renamed := api.AppDetail{App: api.App{Name: "Web Shop", Slug: "web-shop"}}
+	renamedAppDetail := api.AppDetail{App: api.App{Name: "Web Shop", Slug: "web-shop"}}
 	m := loadedRoot(api.App{Name: "Web App", Slug: "web-app"})
 	m, _ = sendRoot(m, openAppMsg{slug: "web-app", name: "Web App"})
 	m, _ = sendRoot(m, appDetailLoadedMsg{appDetail: api.AppDetail{App: api.App{Name: "Web App", Slug: "web-app"}}})
 	m, _ = sendRoot(m, openRenameAppDialogMsg{slug: "web-app", name: "Web App"})
 
-	m, cmd := sendRoot(m, appRenamedMsg{previousSlug: "web-app", appDetail: renamed})
+	m, cmd := sendRoot(m, appRenamedMsg{previousSlug: "web-app", appDetail: renamedAppDetail})
 
 	if m.dialog != nil || m.detail == nil || !m.detail.shows("web-shop") || !strings.Contains(m.View().Content, "Web Shop") {
 		t.Fatalf("dialog = %v, view = %q", m.dialog, m.View().Content)
 	}
 	if !containsAppsChanged(collectMessages(cmd)) {
 		t.Fatal("the list must be told to reload")
+	}
+}
+
+func TestRenamingAnotherAppLeavesTheOpenScreenAlone(t *testing.T) {
+	m := loadedRoot(api.App{Name: "Web App", Slug: "web-app"}, api.App{Name: "Other", Slug: "other"})
+	m, _ = sendRoot(m, openAppMsg{slug: "web-app", name: "Web App"})
+	m, _ = sendRoot(m, appDetailLoadedMsg{appDetail: api.AppDetail{App: api.App{Name: "Web App", Slug: "web-app"}}})
+
+	m, cmd := sendRoot(m, appRenamedMsg{previousSlug: "other", appDetail: api.AppDetail{App: api.App{Name: "Another", Slug: "another"}}})
+
+	if m.detail == nil || !m.detail.shows("web-app") || m.detail.name != "Web App" {
+		t.Fatalf("the open screen changed: %+v", m.detail)
+	}
+	if !containsAppsChanged(collectMessages(cmd)) {
+		t.Fatal("the list must still be told to reload")
 	}
 }
 
@@ -382,6 +397,7 @@ func TestRenamingAnAppFromTheListLeavesNoDetailOpen(t *testing.T) {
 
 func TestAFailedRenameShowsTheErrorAndKeepsTheDialogOpen(t *testing.T) {
 	m := NewRootModel(fakeBackend{fakeAppRenamer: fakeAppRenamer{err: errors.New("connection refused")}})
+	m, _ = sendRoot(m, openAppMsg{slug: "web-app", name: "Web App"})
 	m, _ = sendRoot(m, openRenameAppDialogMsg{slug: "web-app", name: "Web App"})
 	m, cmd := sendRoot(typeIntoRoot(m, "2"), tea.KeyPressMsg{Code: tea.KeyEnter})
 
@@ -389,5 +405,8 @@ func TestAFailedRenameShowsTheErrorAndKeepsTheDialogOpen(t *testing.T) {
 
 	if view := m.View().Content; m.dialog == nil || !strings.Contains(view, "connection refused") || !strings.Contains(view, "Web App2") {
 		t.Fatalf("view = %q", view)
+	}
+	if !m.detail.shows("web-app") || m.detail.name != "Web App" {
+		t.Fatalf("a failed rename changed the open screen: %+v", m.detail)
 	}
 }

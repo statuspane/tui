@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -185,38 +186,52 @@ func TestRenameDialogStartsWithTheCurrentName(t *testing.T) {
 	}
 }
 
-func TestRenameDialogSendsTheTrimmedNewNameForTheAppsSlug(t *testing.T) {
-	var requests []string
-	renamed := api.AppDetail{App: api.App{Name: "Web Shop", Slug: "web-shop"}}
-	d := newTestRenameDialog(fakeAppRenamer{appDetail: renamed, requests: &requests})
-	for range len("App") {
+func backspaces(d dialog, count int) dialog {
+	for range count {
 		d, _ = d.update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	}
+	return d
+}
 
-	_, cmd := pressEnter(typeText(d, "Shop "))
+func TestRenameDialogSendsTheTrimmedNewNameForTheAppsSlug(t *testing.T) {
+	var renames []string
+	d := newTestRenameDialog(fakeAppRenamer{appDetail: api.AppDetail{App: api.App{Slug: "web-shop"}}, requests: &renames})
+
+	_, cmd := pressEnter(typeText(backspaces(d, len("App")), "Shop "))
 	msg := cmd()
 
-	appRenamed, ok := msg.(appRenamedMsg)
-	if !ok || appRenamed.previousSlug != "web-app" || appRenamed.appDetail.Slug != "web-shop" || len(requests) != 1 || requests[0] != "web-app=Web Shop" {
-		t.Fatalf("msg = %#v, requests = %v", msg, requests)
+	if !reflect.DeepEqual(renames, []string{"web-app=Web Shop"}) {
+		t.Fatalf("renames = %v", renames)
+	}
+	renamedMsg, ok := msg.(appRenamedMsg)
+	if !ok || renamedMsg.previousSlug != "web-app" {
+		t.Fatalf("msg = %#v", msg)
 	}
 }
 
-func TestRenameDialogClosesWithoutARequestWhenTheNameIsUnchangedOrBlank(t *testing.T) {
-	var requests []string
-	blank := newTestRenameDialog(fakeAppRenamer{requests: &requests})
-	for range len("Web App") {
-		blank, _ = blank.update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	}
-	for name, d := range map[string]dialog{"unchanged": newTestRenameDialog(fakeAppRenamer{requests: &requests}), "blank": blank} {
-		_, cmd := pressEnter(d)
+func TestRenameDialogClosesWithoutARequestWhenTheNameIsUnchanged(t *testing.T) {
+	for name, typed := range map[string]string{"exactly": "", "with spaces around it": "  "} {
+		t.Run(name, func(t *testing.T) {
+			var renames []string
+			d := typeText(newTestRenameDialog(fakeAppRenamer{requests: &renames}), typed)
 
-		if _, ok := cmd().(closeDialogMsg); !ok {
-			t.Errorf("%s: want the dialog to close", name)
-		}
+			_, cmd := pressEnter(d)
+
+			if _, ok := cmd().(closeDialogMsg); !ok || len(renames) != 0 {
+				t.Fatalf("want the dialog to close without a request, renames = %v", renames)
+			}
+		})
 	}
-	if len(requests) != 0 {
-		t.Fatalf("requests = %v", requests)
+}
+
+func TestRenameDialogStaysOpenWithoutARequestWhenTheNameIsBlank(t *testing.T) {
+	var renames []string
+	d := backspaces(newTestRenameDialog(fakeAppRenamer{requests: &renames}), len("Web App"))
+
+	_, cmd := pressEnter(d)
+
+	if cmd != nil || len(renames) != 0 {
+		t.Fatalf("blank name must neither close the dialog nor send a request, renames = %v", renames)
 	}
 }
 
@@ -235,7 +250,8 @@ func TestRenameDialogShowsTheAPIsMessageAboutTheNameAndKeepsTheText(t *testing.T
 	}
 }
 
-// The dialogs share these rules, so one table covers them.
+// The dialogs share these rules, so one table covers them. validText is typed after whatever the
+// dialog starts with: the rename dialog starts with "Web App", so " 2" makes a new name.
 var dialogCases = []struct {
 	name      string
 	open      func() dialog

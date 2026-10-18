@@ -13,7 +13,7 @@ import (
 
 // AppRenamer is the one thing the rename dialog needs from the API client; tests pass a fake.
 type AppRenamer interface {
-	RenameApp(ctx context.Context, appSlug, name string) (api.AppDetail, error)
+	RenameApp(ctx context.Context, appSlug, newName string) (api.AppDetail, error)
 }
 
 type openRenameAppDialogMsg struct {
@@ -33,20 +33,15 @@ type renameAppFailedMsg struct{ err error }
 type renameAppDialog struct {
 	appRenamer   AppRenamer
 	slug         string
-	name         string
+	currentName  string
 	input        textinput.Model
 	isSubmitting bool
 	err          error
 }
 
 func newRenameAppDialog(appRenamer AppRenamer, msg openRenameAppDialogMsg) (renameAppDialog, tea.Cmd) {
-	input := textinput.New()
-	input.Prompt = ""
-	input.CharLimit = maxAppNameLength
-	input.SetWidth(inputWidth)
-	input.SetValue(msg.name)
-	focusCmd := input.Focus()
-	return renameAppDialog{appRenamer: appRenamer, slug: msg.slug, name: msg.name, input: input}, focusCmd
+	input, focusCmd := newNameInput(msg.name)
+	return renameAppDialog{appRenamer: appRenamer, slug: msg.slug, currentName: msg.name, input: input}, focusCmd
 }
 
 func (d renameAppDialog) update(msg tea.Msg) (dialog, tea.Cmd) {
@@ -75,12 +70,15 @@ func (d renameAppDialog) handleKey(keyPress tea.KeyPressMsg) (dialog, tea.Cmd) {
 		if d.isSubmitting {
 			return d, nil
 		}
-		name := strings.TrimSpace(d.input.Value())
-		if name == "" || name == d.name {
+		newName := strings.TrimSpace(d.input.Value())
+		switch newName {
+		case "":
+			return d, nil
+		case d.currentName:
 			return d, closeDialog
 		}
 		d.isSubmitting, d.err = true, nil
-		return d, renameApp(d.appRenamer, d.slug, name)
+		return d, renameApp(d.appRenamer, d.slug, newName)
 	}
 	if d.isSubmitting {
 		return d, nil
@@ -96,7 +94,7 @@ func (d renameAppDialog) view() string {
 		"",
 		mutedStyle.Render("Name"),
 		d.input.View(),
-		mutedStyle.Render(nameLengthText(len([]rune(d.input.Value())))),
+		mutedStyle.Render(nameLengthText(d.input.Value())),
 	}
 	switch {
 	case d.isSubmitting:
@@ -108,12 +106,12 @@ func (d renameAppDialog) view() string {
 	return renderDialog(colorBlue, lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
-func renameApp(appRenamer AppRenamer, appSlug, name string) tea.Cmd {
+func renameApp(appRenamer AppRenamer, appSlug, newName string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 		defer cancel()
 
-		appDetail, err := appRenamer.RenameApp(ctx, appSlug, name)
+		appDetail, err := appRenamer.RenameApp(ctx, appSlug, newName)
 		if err != nil {
 			return renameAppFailedMsg{err: err}
 		}
