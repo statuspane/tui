@@ -23,6 +23,23 @@ func (m WatchPickerModel) startFilter() (WatchPickerModel, tea.Cmd) {
 	return m, cmd
 }
 
+// focusedFilter is the filter of the pane that has the focus.
+func (m WatchPickerModel) focusedFilter() paneFilter {
+	if m.focusedPane == providersPane {
+		return m.providersFilter
+	}
+	return m.componentsFilter
+}
+
+// clearFocusedFilter drops the kept query of the pane that has the focus, the way esc does inside
+// its box: the cursor goes back to the first match.
+func (m WatchPickerModel) clearFocusedFilter(keyPress tea.KeyPressMsg) (WatchPickerModel, tea.Cmd) {
+	if m.focusedPane == providersPane {
+		return m.handleProvidersFilterKey(keyPress)
+	}
+	return m.handleComponentsFilterKey(keyPress)
+}
+
 // handleProvidersFilterKey narrows the providers as the user types and puts the cursor on the
 // first match; where it lands is fetched after the usual settle delay.
 func (m WatchPickerModel) handleProvidersFilterKey(keyPress tea.KeyPressMsg) (WatchPickerModel, tea.Cmd) {

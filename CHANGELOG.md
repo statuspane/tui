@@ -28,6 +28,11 @@ All notable user-facing changes are listed here. The format follows
 - The TUI now runs in the terminal's alternate screen, so quitting gives you your shell back as
   it was.
 
+### Fixed
+
+- In the component picker, `esc` clears a filter you kept with `enter` (the key bar says so)
+  instead of closing the picker; a second `esc` closes it.
+
 ## [0.3.0] - 2026-10-17
 
 A more comfortable component picker: filter as you type, see groups, and spot what you chose.

@@ -70,7 +70,7 @@ func (f paneFilter) line(hint string) string {
 	case f.active:
 		return f.input.View()
 	case f.isNarrowing():
-		return mutedStyle.Render("Filter: " + f.query + " (esc clears)")
+		return mutedStyle.Render("Filter: " + f.query)
 	}
 	return mutedStyle.Render(hint)
 }

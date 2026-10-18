@@ -730,7 +730,7 @@ func TestEnterKeepsTheProviderFilterAndTheKeysWorkAgain(t *testing.T) {
 
 	m, _ = m.Update(keyEnter)
 
-	assertViewContains(t, m.View().Content, "Filter: c (esc clears)", "Cloudflare")
+	assertViewContains(t, m.View().Content, "Filter: c", "Cloudflare")
 	assertViewLacks(t, m.View().Content, "GitHub")
 	m, fetch := settleCursor(m)
 	m = settle(m, fetch)

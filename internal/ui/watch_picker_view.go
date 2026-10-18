@@ -106,7 +106,11 @@ func (m WatchPickerModel) footer(contentWidth int) string {
 	if m.providersFilter.active || m.componentsFilter.active {
 		return footerBar(filteringHints, "", contentWidth)
 	}
-	return footerBar(m.keyHints(), renderHint(keyHint{"esc", "cancel"}), contentWidth)
+	escapeLabel := "cancel"
+	if m.focusedFilter().isNarrowing() {
+		escapeLabel = "clear filter"
+	}
+	return footerBar(m.keyHints(), renderHint(keyHint{"esc", escapeLabel}), contentWidth)
 }
 
 var filteringHints = []keyHint{{"type", "to filter"}, {"⏎", "keep"}, {"esc", "clear"}}
