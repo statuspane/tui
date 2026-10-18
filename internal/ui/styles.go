@@ -17,6 +17,13 @@ var (
 	selectedStyle = lipgloss.NewStyle().Bold(true)
 	mutedStyle    = lipgloss.NewStyle().Foreground(colorMuted)
 	errorStyle    = lipgloss.NewStyle().Foreground(colorRed)
+
+	watchedStyle = lipgloss.NewStyle().Foreground(colorGreen)
+	addedStyle   = lipgloss.NewStyle().Foreground(colorBlue)
+	removedStyle = lipgloss.NewStyle().Foreground(colorRed)
+
+	// cursorRowStyle is the bar across the row under the cursor; reverse video works on any theme.
+	cursorRowStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
 )
 
 // Keyed by the API's incident impact levels.
@@ -25,4 +32,31 @@ var impactStyles = map[string]lipgloss.Style{
 	"minor":    lipgloss.NewStyle().Foreground(colorYellow),
 	"major":    lipgloss.NewStyle().Foreground(colorOrange),
 	"critical": lipgloss.NewStyle().Foreground(colorRed),
+}
+
+func markerStyleFor(state watchState) lipgloss.Style {
+	switch state {
+	case stateWatched:
+		return watchedStyle
+	case stateAdded:
+		return addedStyle
+	case stateRemoved:
+		return removedStyle
+	}
+	return mutedStyle
+}
+
+// nameStyleFor makes the chosen components easy to spot in a long list: watched in green, to be
+// added in bold blue, to be removed in red and struck through; a component that is not watched
+// stays plain.
+func nameStyleFor(state watchState) lipgloss.Style {
+	switch state {
+	case stateWatched:
+		return watchedStyle
+	case stateAdded:
+		return addedStyle.Bold(true)
+	case stateRemoved:
+		return removedStyle.Strikethrough(true)
+	}
+	return lipgloss.NewStyle()
 }

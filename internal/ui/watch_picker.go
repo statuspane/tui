@@ -155,6 +155,8 @@ func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel,
 		return m.moveCursor(1)
 	case "space":
 		return m.toggleComponentAtCursor(), nil
+	case "g":
+		return m.toggleGroupAtCursor(), nil
 	case "/":
 		return m.startFilter()
 	case "r":
@@ -230,15 +232,35 @@ func (m WatchPickerModel) refresh() (WatchPickerModel, tea.Cmd) {
 	return m, fetchProviderComponents(m.backend, providerSlug)
 }
 
-func (m WatchPickerModel) toggleComponentAtCursor() WatchPickerModel {
+// componentsAtCursor are the visible components when the cursor is on one of them in the
+// components pane; ok is false otherwise.
+func (m WatchPickerModel) componentsAtCursor() (components []api.Component, ok bool) {
 	if m.focusedPane != componentsPane {
-		return m
+		return nil, false
 	}
-	components := m.visibleComponents()
-	if m.componentIndex >= len(components) {
+	components = m.visibleComponents()
+	return components, m.componentIndex < len(components)
+}
+
+func (m WatchPickerModel) toggleComponentAtCursor() WatchPickerModel {
+	components, ok := m.componentsAtCursor()
+	if !ok {
 		return m
 	}
 	m.selection = m.selection.toggled(keyOf(components[m.componentIndex]))
+	return m
+}
+
+// toggleGroupAtCursor watches the rest of the visible components of the group under the cursor
+// or, when they are all chosen already, unwatches them all. Components a filter hides are left
+// alone: the user never changes what cannot be seen.
+func (m WatchPickerModel) toggleGroupAtCursor() WatchPickerModel {
+	components, ok := m.componentsAtCursor()
+	if !ok {
+		return m
+	}
+	start, end := groupBounds(components, m.componentIndex)
+	m.selection = m.selection.toggledAll(components[start:end])
 	return m
 }
 
@@ -265,11 +287,12 @@ func (m WatchPickerModel) providerComponents() (components []api.Component, load
 	return m.cache.lookup(providerSlug)
 }
 
-// visibleComponents are the selected provider's components that the filter lets through; the
-// cursor moves over these. Nil while they are still loading.
+// visibleComponents are the selected provider's components that the filter lets through, with
+// each group together; the cursor moves over these, in this order, and group headings are only
+// drawn between them. Nil while they are still loading.
 func (m WatchPickerModel) visibleComponents() []api.Component {
 	components, _ := m.providerComponents()
-	return filterComponents(components, m.componentsFilter.query)
+	return orderedByGroup(filterComponents(components, m.componentsFilter.query))
 }
 
 // fetchComponentsIfMissing fetches what the screen shows unless it is cached, already on its way,
