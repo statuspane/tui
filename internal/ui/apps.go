@@ -115,6 +115,12 @@ func (m AppsModel) handleKey(keyPress tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return openAppMsg{slug: app.Slug, name: app.Name} }
 	case "n":
 		return m, func() tea.Msg { return openCreateAppDialogMsg{} }
+	case "e":
+		app, ok := m.selectedApp()
+		if !ok {
+			return m, nil
+		}
+		return m, func() tea.Msg { return openRenameAppDialogMsg{slug: app.Slug, name: app.Name} }
 	case "d":
 		app, ok := m.selectedApp()
 		if !ok {
@@ -170,7 +176,7 @@ func (m AppsModel) View() tea.View {
 	screen := titleStyle.Render("StatusPane") + "\n\n" +
 		m.body() +
 		m.statusLines() +
-		"\n" + mutedStyle.Render("↑/↓ move · enter open · n new · d delete · r refresh · q quit") + "\n"
+		"\n" + mutedStyle.Render("↑/↓ move · enter open · n new · e rename · d delete · r refresh · q quit") + "\n"
 	return tea.NewView(screen)
 }
 

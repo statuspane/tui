@@ -130,6 +130,12 @@ func (m AppDetailModel) handleKey(keyPress tea.KeyPressMsg) (AppDetailModel, tea
 		}
 		msg := openWatchPickerMsg{appSlug: m.slug, appName: m.name, watchedComponents: m.appDetail.WatchedComponents}
 		return m, func() tea.Msg { return msg }
+	case "e":
+		if !m.hasLoaded {
+			return m, nil
+		}
+		msg := openRenameAppDialogMsg{slug: m.slug, name: m.name}
+		return m, func() tea.Msg { return msg }
 	case "d":
 		if !m.hasLoaded {
 			return m, nil
@@ -170,7 +176,7 @@ func (m AppDetailModel) scheduleRefresh() (AppDetailModel, tea.Cmd) {
 
 func (m AppDetailModel) View() tea.View {
 	title := titleStyle.Render("StatusPane") + mutedStyle.Render(" › ") + titleStyle.Render(m.name)
-	help := mutedStyle.Render("↑/↓ scroll · w watch components · d delete · r refresh · esc back · q quit")
+	help := mutedStyle.Render("↑/↓ scroll · w watch components · e rename · d delete · r refresh · esc back · q quit")
 	return tea.NewView(title + "\n" + m.statusLine() + "\n" + m.viewport.View() + "\n\n" + help + "\n")
 }
 

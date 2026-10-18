@@ -44,8 +44,8 @@ in the file, for example to use a local server. Environment variables win over t
 ./statuspane-tui
 ```
 
-`↑/↓` move, `enter` opens an app, `esc` goes back, `n` creates an app, `d` deletes the selected
-app (you type its name to confirm), `r` refreshes, `q` quits. On an app's screen, `w` opens the
+`↑/↓` move, `enter` opens an app, `esc` goes back, `n` creates an app, `e` renames the selected
+app, `d` deletes it (you type its name to confirm), `r` refreshes, `q` quits. On an app's screen, `w` opens the
 component picker: choose a provider, `space` watches or unwatches a component, `g` watches or unwatches the
 whole group under the cursor (the components you can see), `r` asks again
 for the provider on screen, and `s` saves. `/` filters the pane that has the focus as you type

@@ -15,6 +15,7 @@ type fakeBackend struct {
 	fakeAppLister
 	fakeAppGetter
 	fakeAppCreator
+	fakeAppRenamer
 	fakeAppDeleter
 	fakeProviderCatalog
 	fakeWatchedComponentsSetter
@@ -349,4 +350,44 @@ func TestAnswersThatArriveAfterThePickerClosedAreKeptNotLostAsPending(t *testing
 		t.Fatalf("answer = %d messages, listings asked again = %+v", len(answer), listings)
 	}
 	assertViewContains(t, m.View().Content, "GitHub", "API Requests")
+}
+
+func TestRenamingTheOpenAppUpdatesItsScreenWithTheNewSlugAndRefreshesTheList(t *testing.T) {
+	renamed := api.AppDetail{App: api.App{Name: "Web Shop", Slug: "web-shop"}}
+	m := loadedRoot(api.App{Name: "Web App", Slug: "web-app"})
+	m, _ = sendRoot(m, openAppMsg{slug: "web-app", name: "Web App"})
+	m, _ = sendRoot(m, appDetailLoadedMsg{appDetail: api.AppDetail{App: api.App{Name: "Web App", Slug: "web-app"}}})
+	m, _ = sendRoot(m, openRenameAppDialogMsg{slug: "web-app", name: "Web App"})
+
+	m, cmd := sendRoot(m, appRenamedMsg{previousSlug: "web-app", appDetail: renamed})
+
+	if m.dialog != nil || m.detail == nil || !m.detail.shows("web-shop") || !strings.Contains(m.View().Content, "Web Shop") {
+		t.Fatalf("dialog = %v, view = %q", m.dialog, m.View().Content)
+	}
+	if !containsAppsChanged(collectMessages(cmd)) {
+		t.Fatal("the list must be told to reload")
+	}
+}
+
+func TestRenamingAnAppFromTheListLeavesNoDetailOpen(t *testing.T) {
+	m := loadedRoot(api.App{Name: "Web App", Slug: "web-app"})
+	m, _ = sendRoot(m, openRenameAppDialogMsg{slug: "web-app", name: "Web App"})
+
+	m, cmd := sendRoot(m, appRenamedMsg{previousSlug: "web-app", appDetail: api.AppDetail{App: api.App{Name: "Web Shop", Slug: "web-shop"}}})
+
+	if m.dialog != nil || m.detail != nil || !containsAppsChanged(collectMessages(cmd)) {
+		t.Fatalf("dialog = %v, detail = %v", m.dialog, m.detail)
+	}
+}
+
+func TestAFailedRenameShowsTheErrorAndKeepsTheDialogOpen(t *testing.T) {
+	m := NewRootModel(fakeBackend{fakeAppRenamer: fakeAppRenamer{err: errors.New("connection refused")}})
+	m, _ = sendRoot(m, openRenameAppDialogMsg{slug: "web-app", name: "Web App"})
+	m, cmd := sendRoot(typeIntoRoot(m, "2"), tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	m, _ = sendRoot(m, cmd())
+
+	if view := m.View().Content; m.dialog == nil || !strings.Contains(view, "connection refused") || !strings.Contains(view, "Web App2") {
+		t.Fatalf("view = %q", view)
+	}
 }

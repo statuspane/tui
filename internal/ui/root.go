@@ -11,6 +11,7 @@ type Backend interface {
 	AppLister
 	AppGetter
 	AppCreator
+	AppRenamer
 	AppDeleter
 	WatchPickerBackend
 }
@@ -59,6 +60,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		createDialog, focusCmd := newCreateAppDialog(m.backend)
 		m.dialog = createDialog
 		return m, focusCmd
+	case openRenameAppDialogMsg:
+		renameDialog, focusCmd := newRenameAppDialog(m.backend, msg)
+		m.dialog = renameDialog
+		return m, focusCmd
 	case openDeleteAppDialogMsg:
 		deleteDialog, focusCmd := newDeleteAppDialog(m.backend, msg)
 		m.dialog = deleteDialog
@@ -70,6 +75,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = nil
 		opened, openCmd := m.openDetail(msg.appDetail.Slug, msg.appDetail.Name)
 		return opened, tea.Batch(openCmd, appsChanged)
+	case appRenamedMsg:
+		return m.closeDialogAfterRename(msg)
 	case appDeletedMsg:
 		m.dialog = nil
 		if m.detail != nil && m.detail.shows(msg.slug) {
@@ -133,6 +140,19 @@ func (m RootModel) closePickerAfterSave(msg watchedComponentsSavedMsg) (tea.Mode
 	if m.detail != nil {
 		// The saved app reaches the screen the way a freshly loaded one does; both messages carry just the app.
 		updatedDetail, detailCmd := m.detail.Update(appDetailLoadedMsg(msg))
+		m.detail = &updatedDetail
+		cmds = append(cmds, detailCmd)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// closeDialogAfterRename gives the app screen, if it is on the renamed app, the app as the API now
+// has it, and tells the list, whose row changed.
+func (m RootModel) closeDialogAfterRename(msg appRenamedMsg) (tea.Model, tea.Cmd) {
+	m.dialog = nil
+	cmds := []tea.Cmd{appsChanged}
+	if m.detail != nil && m.detail.shows(msg.previousSlug) {
+		updatedDetail, detailCmd := m.detail.Update(appDetailLoadedMsg{appDetail: msg.appDetail})
 		m.detail = &updatedDetail
 		cmds = append(cmds, detailCmd)
 	}
