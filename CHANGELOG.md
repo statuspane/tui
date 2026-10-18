@@ -11,6 +11,14 @@ All notable user-facing changes are listed here. The format follows
 - Rename an app with `e`, from the apps list or from the app screen: a dialog starts with the
   current name and `enter` saves it.
 
+### Changed
+
+- The apps list has a new look: it fills the terminal in a framed layout, with a header that
+  counts your apps in each status, a column header, and a bar of key hints (including the
+  refresh interval) at the bottom. A long list scrolls to keep the selected app in view.
+- The TUI now runs in the terminal's alternate screen, so quitting gives you your shell back as
+  it was.
+
 ## [0.3.0] - 2026-10-17
 
 A more comfortable component picker: filter as you type, see groups, and spot what you chose.

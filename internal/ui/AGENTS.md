@@ -21,6 +21,17 @@ detail, or a dialog (`createAppDialog`, `deleteAppDialog`) instead of any of the
   `closeDialogMsg`, and the root reacts (open the new app, close the deleted app's detail, tell
   the list with `appsChangedMsg`).
 
+## Chrome
+
+`chrome.go` holds what every screen shares: `panel` (a rounded box of exact size with its title
+set into the top edge), `headerBar`, `footerBar` (key hints in a box of their own; hints that
+don't fit are dropped from the right) and `bodyHeight`. `RootModel.View` turns on the alternate
+screen, so a screen lays itself out to the window size it got in `tea.WindowSizeMsg`
+(`fallbackWidth`/`fallbackHeight` until then). Lines are padded before styling and cut with
+`clipTo`, so a frame never wraps. Colours are ANSI indexes (`accentStyle`, `panelBorderStyle`,
+`keyStyle`); don't introduce hex, the terminal's theme decides the shades. Only the apps list uses
+the chrome so far.
+
 ## Gotchas
 
 - While a dialog is open, `RootModel` sends it every key press and the screens none, so typing
