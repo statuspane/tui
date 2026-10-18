@@ -6,6 +6,10 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-17
+
+A more comfortable component picker: filter as you type, see groups, and spot what you chose.
+
 ### Added
 
 - The picker is easier to scan in a long list: the row under the cursor is a bar across the whole
@@ -15,7 +19,6 @@ All notable user-facing changes are listed here. The format follows
   group's components are chosen (`Core Services  2/5 watched`); components without a group come
   last under "Ungrouped", and a provider with no groups looks as before. `g` watches or unwatches
   the whole group under the cursor, or, with a filter on, the components of it you can see.
-
 - Filter the providers in the component picker: with the provider list focused, `/` narrows it as
   you type to the providers whose name, slug or category contains the text (`dev` finds GitHub
   through Developer Tools). `enter` keeps the filter and `esc` clears it. Filtering makes no
@@ -70,6 +73,7 @@ components an app watches are not here yet.
 - Plain explanations for the common failures: a missing API key prints an example config file,
   a rejected key names the setting to check, and a rate limit says how long to wait.
 
-[Unreleased]: https://github.com/statuspane/tui/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/statuspane/tui/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/statuspane/tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/statuspane/tui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/statuspane/tui/releases/tag/v0.1.0
