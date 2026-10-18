@@ -18,7 +18,6 @@ const (
 	// The panes share the width in these proportions.
 	incidentsPaneParts  = 11
 	componentsPaneParts = 10
-	paneGapWidth        = 2
 	moreHintLines       = 1
 )
 
