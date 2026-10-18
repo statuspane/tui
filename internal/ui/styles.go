@@ -35,9 +35,9 @@ var (
 	cursorRowStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
 )
 
-// rowTint is the subtle background of the selected row: a neutral grey, darker or lighter to
+// rowTintColor is the subtle background of the selected row: a neutral grey, darker or lighter to
 // suit the terminal's background.
-func rowTint(hasDarkBackground bool) color.Color {
+func rowTintColor(hasDarkBackground bool) color.Color {
 	return lipgloss.LightDark(hasDarkBackground)(lipgloss.Color("254"), lipgloss.Color("236"))
 }
 

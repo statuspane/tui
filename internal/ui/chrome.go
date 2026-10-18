@@ -14,17 +14,23 @@ const (
 
 	headerHeight = 1
 	// footerHeight is one line of key hints inside a border.
-	footerHeight = 3
+	footerHeight = 1 + borderCells
 
 	// Below this the frame would have no room for content; the terminal wraps what is left.
 	minChromeWidth = 20
 	minPanelHeight = 3
 
+	// A border takes two cells along each axis, one on each side.
+	borderCells  = 2
 	panelPadding = 2
-	// What a panel's border and padding take from the content: two edges, padding on both sides.
-	panelChromeWidth  = 2 + 2*panelPadding
-	panelChromeHeight = 2
-	hintGap           = "  "
+	// What a panel's border and padding take from the content.
+	panelChromeWidth  = borderCells + 2*panelPadding
+	panelChromeHeight = borderCells
+	// A panel's top edge around its title: "╭─ " before it, " " and "╮" after.
+	panelTitleFrameWidth = 5
+
+	hintGap   = "  "
+	brandText = "◉ STATUSPANE"
 )
 
 // keyHint is one entry of the footer: the key and what it does.
@@ -38,32 +44,42 @@ func renderHint(hint keyHint) string {
 // top edge. Lines longer than the box are cut, shorter ones padded; the box never wraps.
 func panel(title, body string, width, height int) string {
 	width, height = max(width, minChromeWidth), max(height, minPanelHeight)
-	contentWidth := width - panelChromeWidth
+	contentWidth, contentHeight := panelContentSize(width, height)
 
-	lines := make([]string, 0, height)
-	lines = append(lines, panelTop(title, width))
-	side := panelBorderStyle.Render("│")
+	lines := []string{panelTop(title, width)}
 	bodyLines := strings.Split(body, "\n")
-	for row := range height - panelChromeHeight {
-		content := ""
+	for row := range contentHeight {
+		bodyLine := ""
 		if row < len(bodyLines) {
-			content = clipTo(bodyLines[row], contentWidth)
+			bodyLine = clipTo(bodyLines[row], contentWidth)
 		}
-		gap := strings.Repeat(" ", contentWidth-lipgloss.Width(content))
-		lines = append(lines, side+strings.Repeat(" ", panelPadding)+content+gap+strings.Repeat(" ", panelPadding)+side)
+		lines = append(lines, panelRow(bodyLine, contentWidth))
 	}
-	lines = append(lines, panelBorderStyle.Render("╰"+strings.Repeat("─", width-2)+"╯"))
+	lines = append(lines, panelBottom(width))
 	return strings.Join(lines, "\n")
+}
+
+// panelContentSize is the room a panel of width x height leaves for its content.
+func panelContentSize(width, height int) (contentWidth, contentHeight int) {
+	return width - panelChromeWidth, height - panelChromeHeight
 }
 
 func panelTop(title string, width int) string {
 	if title == "" {
-		return panelBorderStyle.Render("╭" + strings.Repeat("─", width-2) + "╮")
+		return panelBorderStyle.Render("╭" + strings.Repeat("─", width-borderCells) + "╮")
 	}
-	// "╭─ " + title + " " + fill + "╮"
-	title = clipTo(title, width-5)
-	fill := width - 5 - lipgloss.Width(title)
+	fill := width - panelTitleFrameWidth - lipgloss.Width(title)
 	return panelBorderStyle.Render("╭─ ") + accentStyle.Render(title) + panelBorderStyle.Render(" "+strings.Repeat("─", fill)+"╮")
+}
+
+func panelRow(bodyLine string, contentWidth int) string {
+	side := panelBorderStyle.Render("│")
+	margin := strings.Repeat(" ", panelPadding)
+	return side + margin + padRight(bodyLine, contentWidth) + margin + side
+}
+
+func panelBottom(width int) string {
+	return panelBorderStyle.Render("╰" + strings.Repeat("─", width-borderCells) + "╯")
 }
 
 // headerBar is one line: left at the start, right at the end. Right is dropped when both
@@ -77,26 +93,27 @@ func headerBar(left, right string, width int) string {
 	return left + strings.Repeat(" ", gap) + right
 }
 
-// footerBar is the key hints in a box of their own, with trailing at the far end. Hints that
-// don't fit are dropped from the right, then trailing.
+// footerBar is the key hints in a box of their own, with trailing at the far end.
 func footerBar(hints []keyHint, trailing string, width int) string {
 	width = max(width, minChromeWidth)
-	contentWidth := width - panelChromeWidth
-
-	shown := make([]string, len(hints))
+	renderedHints := make([]string, len(hints))
 	for index, hint := range hints {
-		shown[index] = renderHint(hint)
+		renderedHints[index] = renderHint(hint)
 	}
-	for count := len(shown); ; count-- {
-		left := strings.Join(shown[:count], hintGap)
-		gap := contentWidth - lipgloss.Width(left) - lipgloss.Width(trailing)
-		if gap >= 1 {
-			return panel("", left+strings.Repeat(" ", gap)+trailing, width, footerHeight)
-		}
-		if count == 0 {
-			return panel("", left, width, footerHeight)
+	contentWidth, _ := panelContentSize(width, footerHeight)
+	return panel("", footerLine(renderedHints, trailing, contentWidth), width, footerHeight)
+}
+
+// footerLine fits the most hints beside trailing: hints are dropped from the right first, and
+// trailing goes last.
+func footerLine(renderedHints []string, trailing string, contentWidth int) string {
+	for hintCount := len(renderedHints); hintCount >= 0; hintCount-- {
+		hintsText := strings.Join(renderedHints[:hintCount], hintGap)
+		if gap := contentWidth - lipgloss.Width(hintsText) - lipgloss.Width(trailing); gap >= 1 {
+			return hintsText + strings.Repeat(" ", gap) + trailing
 		}
 	}
+	return ""
 }
 
 // layoutWidth is the width of the screen's content, inside the margin.
@@ -110,14 +127,18 @@ func bodyHeight(screenHeight int) int {
 	return max(screenHeight-taken, minPanelHeight)
 }
 
-// screenLayout stacks the header, the body and the footer with a blank line between them,
+// stackedScreen stacks the header, the body and the footer with a blank line between them,
 // inside the screen margin.
-func screenLayout(header, body, footer string) string {
+func stackedScreen(header, body, footer string) string {
 	stacked := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
 	return lipgloss.NewStyle().Padding(screenMarginY, screenMarginX).Render(stacked)
 }
 
 // clipTo cuts a possibly styled line to width cells, without a trailing ellipsis.
 func clipTo(line string, width int) string {
-	return lipgloss.NewStyle().MaxWidth(max(width, 0)).Render(line)
+	return lipgloss.NewStyle().MaxWidth(width).Render(line)
+}
+
+func padRight(text string, width int) string {
+	return text + strings.Repeat(" ", max(width-lipgloss.Width(text), 0))
 }

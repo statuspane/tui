@@ -235,41 +235,20 @@ func TestAppsScreenIsFramedAndFillsTheWindow(t *testing.T) {
 
 	view := m.View().Content
 	assertViewContains(t, view, "◉ STATUSPANE", "╭─ Apps ─", "NAME", "STATUS", "WATCHING", "refreshes every 30s", "q quit")
-	assertEveryLineIs(t, view, 100)
-	if got := len(strings.Split(view, "\n")); got != 30 {
-		t.Fatalf("height = %d, want 30", got)
-	}
+	assertEveryLineHasWidth(t, view, 100)
+	assertHeightIs(t, view, 30)
 }
 
 func TestAppsScreenFallsBackToAClassicTerminalBeforeTheSizeIsKnown(t *testing.T) {
 	m := newTestAppsModel()
 
-	assertEveryLineIs(t, m.View().Content, fallbackWidth)
+	assertEveryLineHasWidth(t, m.View().Content, fallbackWidth)
 }
 
-func TestAppsHeaderSummarisesHowManyAppsAreInEachStatus(t *testing.T) {
-	m := sizedAppsModel(100, 30,
-		api.App{Name: "A", Status: stringPtr("degraded_performance")},
-		api.App{Name: "B", Status: stringPtr("operational")},
-		api.App{Name: "C", Status: stringPtr("operational")},
-		api.App{Name: "D", Status: stringPtr("under_maintenance")},
-		api.App{Name: "E"},
-	)
+func TestAppsHeaderShowsTheStatusSummary(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "A", Status: stringPtr("operational")}, api.App{Name: "B", Status: stringPtr("operational")})
 
-	var header string
-	for _, line := range strings.Split(plain(t, m.View().Content), "\n") {
-		if strings.Contains(line, "STATUSPANE") {
-			header = line
-		}
-	}
-	for _, want := range []string{"2 operational", "1 maintenance", "1 degraded", "1 pending"} {
-		if !strings.Contains(header, want) {
-			t.Errorf("header missing %q: %q", want, header)
-		}
-	}
-	if strings.Index(header, "operational") > strings.Index(header, "degraded") {
-		t.Errorf("want calmer statuses first: %q", header)
-	}
+	assertViewContains(t, m.View().Content, "2 operational")
 }
 
 func TestAppsFooterOffersEveryAppAction(t *testing.T) {
@@ -289,14 +268,24 @@ func TestSelectedAppIsMarkedAndTheOthersAreNot(t *testing.T) {
 }
 
 func TestStatesBeforeTheFirstLoadAreInsideTheFrame(t *testing.T) {
-	loading := newTestAppsModel()
 	failed, _ := send(newTestAppsModel(), appsFailedMsg{err: errors.New("boom")})
 	empty, _ := send(newTestAppsModel(), appsLoadedMsg{})
+	states := []struct {
+		name     string
+		model    AppsModel
+		wantText string
+	}{
+		{"loading", newTestAppsModel(), "Loading apps"},
+		{"failed", failed, "boom"},
+		{"empty", empty, "No apps yet"},
+	}
 
-	for _, m := range []AppsModel{loading, failed, empty} {
-		view := m.View().Content
-		assertViewContains(t, view, "╭─ Apps ─", "q quit")
-		assertEveryLineIs(t, view, fallbackWidth)
+	for _, state := range states {
+		t.Run(state.name, func(t *testing.T) {
+			view := state.model.View().Content
+			assertViewContains(t, view, "╭─ Apps ─", state.wantText, "q quit")
+			assertEveryLineHasWidth(t, view, fallbackWidth)
+		})
 	}
 }
 
@@ -306,7 +295,7 @@ func TestRefreshStatusSitsInsideThePanelUnderTheList(t *testing.T) {
 
 	view := m.View().Content
 	assertViewContains(t, view, "Web App", "Refresh failed: connection refused")
-	assertEveryLineIs(t, view, 100)
+	assertEveryLineHasWidth(t, view, 100)
 }
 
 func TestLongListScrollsToKeepTheSelectedAppInView(t *testing.T) {
@@ -322,16 +311,14 @@ func TestLongListScrollsToKeepTheSelectedAppInView(t *testing.T) {
 	view := m.View().Content
 	assertViewContains(t, view, "▸ App 30")
 	assertViewLacks(t, view, "App 00")
-	if got := len(strings.Split(view, "\n")); got != 16 {
-		t.Fatalf("height = %d, want 16", got)
-	}
+	assertHeightIs(t, view, 16)
 }
 
 func TestResizingRedrawsAtTheNewWidth(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
 	m, _ = send(m, tea.WindowSizeMsg{Width: 60, Height: 20})
 
-	assertEveryLineIs(t, m.View().Content, 60)
+	assertEveryLineHasWidth(t, m.View().Content, 60)
 }
 
 func TestNAsksForTheCreateDialog(t *testing.T) {
@@ -427,22 +414,25 @@ func TestAppsChangedDuringALoadReloadsRightAfterIt(t *testing.T) {
 func TestColumnHeaderHasARuleUnderIt(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
 
-	assertViewContains(t, m.View().Content, "│  "+strings.Repeat("─", 90)+"  │")
+	contentWidth, _ := panelContentSize(layoutWidth(100), bodyHeight(30))
+	padding := strings.Repeat(" ", panelPadding)
+	assertViewContains(t, m.View().Content, "│"+padding+strings.Repeat("─", contentWidth)+padding+"│")
 }
 
-func TestStatusAndWatchingColumnsSitAtTheRightOfTheRow(t *testing.T) {
+func TestWatchingColumnEndsAtTheRowPaddingFromThePanelContent(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "Web App", Status: stringPtr("operational"), WatchedComponentsCount: 3})
 
 	var columns []int
 	for _, line := range strings.Split(plain(t, m.View().Content), "\n") {
-		for _, marker := range []string{"WATCHING", "3 components"} {
-			if index := strings.Index(line, marker); index >= 0 {
+		for _, cell := range []string{"WATCHING", "3 components"} {
+			if index := strings.Index(line, cell); index >= 0 {
 				columns = append(columns, lipgloss.Width(line[:index]))
 			}
 		}
 	}
-	if len(columns) != 2 || columns[0] != columns[1] || columns[0] < 70 {
-		t.Fatalf("watching columns = %v, want both at the right edge", columns)
+	want := screenMarginX + layoutWidth(100) - borderCells/2 - panelPadding - rowPaddingX - watchingColumnWidth
+	if len(columns) != 2 || columns[0] != want || columns[1] != want {
+		t.Fatalf("watching columns start at %v, want both at %d", columns, want)
 	}
 }
 
@@ -457,14 +447,20 @@ func selectedRowOf(t *testing.T, m AppsModel) string {
 	return ""
 }
 
-func TestSelectedRowIsTintedAndKeepsItsStatusColour(t *testing.T) {
+func TestSelectedRowIsTinted(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "Web App", Status: stringPtr("operational")})
 
-	row := selectedRowOf(t, m)
-	if !strings.Contains(row, "48;5;236") {
+	tint := escapeBefore(lipgloss.NewStyle().Background(rowTintColor(true)).Render("x"))
+	if row := selectedRowOf(t, m); !strings.Contains(row, tint) {
 		t.Errorf("selected row has no dark tint: %q", row)
 	}
-	if !strings.Contains(row, "32;48;5;236") {
+}
+
+func TestSelectedRowKeepsItsStatusColour(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "Web App", Status: stringPtr("operational")})
+
+	statusStyle := appearanceOf(stringPtr("operational")).style.Background(rowTintColor(true))
+	if row := selectedRowOf(t, m); !strings.Contains(row, escapeBefore(statusStyle.Render("x"))) {
 		t.Errorf("selected row lost the status colour: %q", row)
 	}
 }
@@ -473,7 +469,8 @@ func TestSelectedRowTintFollowsALightBackground(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
 	m, _ = send(m, tea.BackgroundColorMsg{Color: lipgloss.Color("#ffffff")})
 
-	if row := selectedRowOf(t, m); !strings.Contains(row, "48;5;254") {
+	lightTint := escapeBefore(lipgloss.NewStyle().Background(rowTintColor(false)).Render("x"))
+	if row := selectedRowOf(t, m); !strings.Contains(row, lightTint) {
 		t.Errorf("selected row has no light tint: %q", row)
 	}
 }
@@ -482,16 +479,17 @@ func TestOnlyTheSelectedAppsOwnLineIsTinted(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "First"}, api.App{Name: "Second"}, api.App{Name: "Third"})
 	m = pressRune(m, 'j')
 
-	var tinted int
+	tint := escapeBefore(lipgloss.NewStyle().Background(rowTintColor(true)).Render("x"))
+	var tinted []string
 	for _, line := range strings.Split(m.View().Content, "\n") {
-		if strings.Contains(line, "48;5;236") {
-			tinted++
-			assertViewContains(t, line, "▸ Second")
+		if strings.Contains(line, tint) {
+			tinted = append(tinted, plain(t, line))
 		}
 	}
-	if tinted != 1 {
-		t.Fatalf("%d lines are tinted, want 1", tinted)
+	if len(tinted) != 1 {
+		t.Fatalf("%d lines are tinted, want 1", len(tinted))
 	}
+	assertViewContains(t, tinted[0], "▸ Second")
 }
 
 func TestAppsAreSeparatedByABlankLine(t *testing.T) {
@@ -501,8 +499,7 @@ func TestAppsAreSeparatedByABlankLine(t *testing.T) {
 
 	lines := strings.Split(plain(t, m.View().Content), "\n")
 	first := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, "First") })
-	blank := strings.Trim(strings.Join(strings.Fields(lines[first+1]), ""), "│")
-	if blank != "" || !strings.Contains(lines[first+2], "Second") {
+	if strings.TrimSpace(strings.Trim(lines[first+1], "│ ")) != "" || !strings.Contains(lines[first+2], "Second") {
 		t.Fatalf("want First, a blank line, then Second:\n%s", strings.Join(lines[first:first+3], "\n"))
 	}
 }

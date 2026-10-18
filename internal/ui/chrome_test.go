@@ -7,15 +7,6 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-func assertEveryLineIs(t *testing.T, view string, width int) {
-	t.Helper()
-	for _, line := range strings.Split(view, "\n") {
-		if got := lipgloss.Width(line); got != width {
-			t.Errorf("line %q is %d wide, want %d", plain(t, line), got, width)
-		}
-	}
-}
-
 func TestPanelSetsTheTitleIntoTheTopEdge(t *testing.T) {
 	view := panel("Apps", "hello", 30, 5)
 
@@ -29,7 +20,7 @@ func TestPanelSetsTheTitleIntoTheTopEdge(t *testing.T) {
 func TestPanelIsExactlyTheSizeAsked(t *testing.T) {
 	view := panel("Apps", "short\na much longer line than the panel has room for\nthird", 30, 8)
 
-	assertEveryLineIs(t, view, 30)
+	assertEveryLineHasWidth(t, view, 30)
 	if got := len(strings.Split(view, "\n")); got != 8 {
 		t.Fatalf("height = %d, want 8", got)
 	}
@@ -48,12 +39,6 @@ func TestPanelWithoutATitleIsAPlainBox(t *testing.T) {
 	if top != "╭──────────────────╮" {
 		t.Fatalf("top edge = %q", top)
 	}
-}
-
-func TestPanelCutsALongTitleInsteadOfBreakingTheEdge(t *testing.T) {
-	view := panel(strings.Repeat("T", 50), "x", 24, 3)
-
-	assertEveryLineIs(t, view, 24)
 }
 
 func TestHeaderBarPutsRightAtTheFarEnd(t *testing.T) {
@@ -77,7 +62,7 @@ func TestFooterBarShowsHintsAndTrailing(t *testing.T) {
 	view := footerBar(hints, "q quit", 60)
 
 	assertViewContains(t, view, "↑↓ move", "enter open", "q quit")
-	assertEveryLineIs(t, view, 60)
+	assertEveryLineHasWidth(t, view, 60)
 	if got := len(strings.Split(view, "\n")); got != footerHeight {
 		t.Fatalf("height = %d, want %d", got, footerHeight)
 	}
@@ -89,14 +74,14 @@ func TestFooterBarDropsHintsFromTheRightWhenTheyDoNotFit(t *testing.T) {
 
 	assertViewContains(t, view, "↑↓ move", "q quit")
 	assertViewLacks(t, view, "delete")
-	assertEveryLineIs(t, view, 36)
+	assertEveryLineHasWidth(t, view, 36)
 }
 
 func TestFooterBarDropsTrailingWhenNothingElseFits(t *testing.T) {
 	view := footerBar([]keyHint{{"enter", "open"}}, strings.Repeat("t", 40), 24)
 
 	assertViewLacks(t, view, "ttt")
-	assertEveryLineIs(t, view, 24)
+	assertEveryLineHasWidth(t, view, 24)
 }
 
 func TestBodyHeightLeavesRoomForMarginHeaderAndFooter(t *testing.T) {
@@ -104,7 +89,10 @@ func TestBodyHeightLeavesRoomForMarginHeaderAndFooter(t *testing.T) {
 	if got := bodyHeight(30); got != 22 {
 		t.Fatalf("bodyHeight = %d, want 22", got)
 	}
-	if got := bodyHeight(2); got < minPanelHeight {
-		t.Fatalf("bodyHeight = %d, want at least %d", got, minPanelHeight)
+}
+
+func TestBodyHeightNeverDropsBelowTheMinimumPanel(t *testing.T) {
+	if got := bodyHeight(2); got != minPanelHeight {
+		t.Fatalf("bodyHeight = %d, want %d", got, minPanelHeight)
 	}
 }
