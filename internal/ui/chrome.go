@@ -14,8 +14,9 @@ const (
 	sectionGap    = 1
 
 	headerHeight = 1
-	// footerHeight is one line of key hints inside a border.
-	footerHeight = 1 + borderCells
+	// oneLineBoxHeight is a box around a single line: the line and its two borders.
+	oneLineBoxHeight = 1 + borderCells
+	footerHeight     = oneLineBoxHeight
 
 	// Below this the frame would have no room for content; the terminal wraps what is left.
 	minChromeWidth = 20
@@ -34,6 +35,9 @@ const (
 	fallbackWidth  = 80
 	fallbackHeight = 24
 
+	// The gap between two panels side by side.
+	panelGapWidth = 2
+
 	hintGap   = "  "
 	brandText = "◉ STATUSPANE"
 )
@@ -49,6 +53,15 @@ func renderHint(hint keyHint) string {
 type panelLook struct{ border, title lipgloss.Style }
 
 var defaultPanelLook = panelLook{border: panelBorderStyle, title: accentStyle}
+
+// untintedPanelLook is the look of a pane that is not tinted by anything: the accent colour while
+// it has the focus, quiet otherwise.
+func untintedPanelLook(isFocused bool) panelLook {
+	if isFocused {
+		return panelLook{border: lipgloss.NewStyle().Foreground(colorBlue), title: accentStyle}
+	}
+	return defaultPanelLook
+}
 
 func panel(title, body string, width, height int) string {
 	return panelWithLook(defaultPanelLook, title, body, width, height)
@@ -116,6 +129,13 @@ func footerBar(hints []keyHint, trailing string, width int) string {
 	}
 	contentWidth, _ := panelContentSize(width, footerHeight)
 	return panel("", footerLine(renderedHints, trailing, contentWidth), width, footerHeight)
+}
+
+// alertBar is a footer-shaped box with a red edge that says something the footer's keys must not
+// drown out, such as a question the user has to answer.
+func alertBar(message string, width int) string {
+	look := panelLook{border: errorStyle}
+	return panelWithLook(look, "", errorStyle.Render(message), max(width, minChromeWidth), footerHeight)
 }
 
 // footerLine fits the most hints beside trailing: hints are dropped from the right first, and

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -12,34 +13,80 @@ import (
 )
 
 const (
-	// Rows around the lists: title, status line, blank, pane title, search line, blank, help, and
-	// the newline that ends the screen.
-	pickerChromeHeight = 8
-	minPickerRows      = 5 // room for a heading and a few rows under it
-
-	paneGap     = "    "
 	loadingText = "Loading…"
 
 	// Wide enough for a short error while the providers are not there to size the pane.
 	minProvidersWidth = 30
+
+	minPickerRows = 5 // room for a heading and a few rows under it
+
+	// Under a panel's rows come a rule and a footer line, and above them the filter's box.
+	panelRuleAndFooterHeight  = 2
+	pickerPanelOverheadHeight = panelChromeHeight + oneLineBoxHeight + panelRuleAndFooterHeight
+
+	providersFilterPlaceholder  = "/ to filter providers"
+	componentsFilterPlaceholder = "/ to filter by name or group"
+	providersMatchScope         = "name, slug or category"
+	componentsMatchScope        = "name or group"
 )
 
 func (m WatchPickerModel) View() tea.View {
-	title := titleStyle.Render("StatusPane") + mutedStyle.Render(" › ") + m.appName + mutedStyle.Render(" › ") + titleStyle.Render("Watch components")
-	panes := lipgloss.JoinHorizontal(lipgloss.Top, m.providersView(), paneGap, m.componentsView())
-	return tea.NewView(title + "\n" + m.statusLine() + "\n\n" + panes + "\n\n" + mutedStyle.Render(m.helpText()) + "\n")
+	layout := m.layout()
+	header := headerBar(m.headerLeft(), m.headerNotice(), layout.contentWidth)
+	panels := lipgloss.JoinHorizontal(lipgloss.Top,
+		m.providersPanel(layout), strings.Repeat(" ", panelGapWidth), m.componentsPanel(layout))
+	return tea.NewView(stackedScreen(header, panels, m.footer(layout.contentWidth)))
 }
 
-func (m WatchPickerModel) statusLine() string {
+// pickerLayout is how the window is shared out: the width inside the margin, each panel's width,
+// the panels' height and how many rows of a list fit in one.
+type pickerLayout struct{ contentWidth, providersWidth, componentsWidth, panelHeight, rowCount int }
+
+// layout gives the providers panel what its content needs, but no more than half the width, and
+// the components panel the rest. The panels are never shorter than room for minPickerRows, so a
+// short window still shows the cursor row.
+func (m WatchPickerModel) layout() pickerLayout {
+	windowWidth, windowHeight := withFallbackSize(m.width, m.height)
+	contentWidth := layoutWidth(windowWidth)
+	panelSpace := contentWidth - panelGapWidth
+	providersWidth := min(m.providersWidth()+panelChromeWidth, panelSpace/2)
+	panelHeight := max(bodyHeight(windowHeight), pickerPanelOverheadHeight+minPickerRows)
+	return pickerLayout{
+		contentWidth:    contentWidth,
+		providersWidth:  providersWidth,
+		componentsWidth: panelSpace - providersWidth,
+		panelHeight:     panelHeight,
+		rowCount:        panelHeight - pickerPanelOverheadHeight,
+	}
+}
+
+func (m WatchPickerModel) visibleRowCount() int {
+	return m.layout().rowCount
+}
+
+func (m WatchPickerModel) headerLeft() string {
+	return accentStyle.Render(brandText) + mutedStyle.Render(" › ") + m.appName + mutedStyle.Render(" › ") + titleStyle.Render("Watch components")
+}
+
+// headerNotice is what the screen is doing about the user's changes: saving them, or holding
+// some that are not saved yet.
+func (m WatchPickerModel) headerNotice() string {
 	switch {
 	case m.isSaving:
 		return "Saving…"
-	case m.saveErr != nil:
-		return errorStyle.Render("Could not save: " + validationMessage(m.saveErr))
-	case m.confirmingDiscard:
-		return errorStyle.Render(fmt.Sprintf("Discard %s? Press esc again to discard, any other key to keep editing.", changesText(m.selection.changeCount())))
 	case m.selection.changeCount() > 0:
-		return changesText(m.selection.changeCount()) + " not saved yet"
+		return warningStyle.Render("● " + unsavedChangesText(m.selection.changeCount()))
+	}
+	return ""
+}
+
+// alertText is a question or an error the footer's keys must not drown out; empty for none.
+func (m WatchPickerModel) alertText() string {
+	switch {
+	case m.saveErr != nil:
+		return "Could not save: " + validationMessage(m.saveErr)
+	case m.confirmingDiscard:
+		return fmt.Sprintf("Discard %s? Press esc again to discard, any other key to keep editing.", changesText(m.selection.changeCount()))
 	}
 	return ""
 }
@@ -51,33 +98,90 @@ func changesText(count int) string {
 	return strconv.Itoa(count) + " changes"
 }
 
-func (m WatchPickerModel) helpText() string {
-	switch {
-	case m.providersFilter.active || m.componentsFilter.active:
-		return filteringHelpText
-	case m.focusedPane == providersPane:
-		return "↑/↓ move · tab switch pane · / filter providers · r refresh · s save · esc cancel"
+func unsavedChangesText(count int) string {
+	if count == 1 {
+		return "1 unsaved change"
 	}
-	return "↑/↓ move · tab switch pane · space watch or unwatch · g toggle group · / filter components · r refresh · s save · esc cancel"
+	return strconv.Itoa(count) + " unsaved changes"
 }
 
-func (m WatchPickerModel) visibleRowCount() int {
-	return max(m.height-pickerChromeHeight, minPickerRows)
+func (m WatchPickerModel) footer(contentWidth int) string {
+	if alert := m.alertText(); alert != "" {
+		return alertBar(alert, contentWidth)
+	}
+	if m.providersFilter.active || m.componentsFilter.active {
+		return footerBar(filteringHints, "", contentWidth)
+	}
+	return footerBar(m.keyHints(), renderHint(m.escapeHint()), contentWidth)
 }
 
-func (m WatchPickerModel) providersView() string {
-	lines := []string{paneTitle("Providers", m.focusedPane == providersPane), m.providersFilter.line("/ to filter providers")}
+// escapeHint says what esc does now: clear the focused pane's kept filter, or cancel the picker.
+func (m WatchPickerModel) escapeHint() keyHint {
+	if m.focusedFilter().isNarrowing() {
+		return keyHint{"esc", "clear filter"}
+	}
+	return keyHint{"esc", "cancel"}
+}
+
+func (m WatchPickerModel) keyHints() []keyHint {
+	if m.focusedPane == providersPane {
+		return []keyHint{{"↑↓", "move"}, {"/", "filter"}, {"tab", "switch pane"}, {"s", "save"}, {"r", "refresh"}}
+	}
+	return []keyHint{{"↑↓", "move"}, {"space", "toggle"}, {"g", "group"}, {"/", "filter"}, {"tab", "switch pane"}, {"s", "save"}, {"r", "refresh"}}
+}
+
+func (m WatchPickerModel) providersPanel(layout pickerLayout) string {
+	panelContentWidth, _ := panelContentSize(layout.providersWidth, layout.panelHeight)
+	filterBoxView := filterBox(m.providersFilter, providersFilterPlaceholder, len(m.visibleProviders()), providersMatchScope, panelContentWidth)
+	footer := mutedStyle.Render(fmt.Sprintf("%d watched in total", m.selection.chosenCount()))
+	body := stackedPanelBody(filterBoxView, m.providerLines(), layout.rowCount, footer, panelContentWidth)
+	return panelWithLook(untintedPanelLook(m.focusedPane == providersPane), "Providers", body, layout.providersWidth, layout.panelHeight)
+}
+
+func (m WatchPickerModel) componentsPanel(layout pickerLayout) string {
+	panelContentWidth, _ := panelContentSize(layout.componentsWidth, layout.panelHeight)
+	filterBoxView := filterBox(m.componentsFilter, componentsFilterPlaceholder, len(m.visibleComponents()), componentsMatchScope, panelContentWidth)
+	body := stackedPanelBody(filterBoxView, m.componentLines(), layout.rowCount, componentsLegend(), panelContentWidth)
+	return panelWithLook(untintedPanelLook(m.focusedPane == componentsPane), m.componentsTitle(), body, layout.componentsWidth, layout.panelHeight)
+}
+
+// componentsTitle names the provider under the cursor and how many components it has, once known.
+func (m WatchPickerModel) componentsTitle() string {
+	provider, ok := m.providerAtCursor()
+	if !ok {
+		return "Components"
+	}
+	title := provider.Name + " components"
+	if listed, loaded := m.providerComponents(); loaded {
+		title += fmt.Sprintf(" · %d", len(listed))
+	}
+	return title
+}
+
+func componentsLegend() string {
+	return addedStyle.Render("[+]") + mutedStyle.Render(" to watch · ") + removedStyle.Render("[-]") +
+		mutedStyle.Render(" to stop · saved with ") + keyStyle.Render("s")
+}
+
+// stackedPanelBody stacks a panel's filter box, its rows padded to rowCount lines, a rule and its
+// footer, so the footer stays at the bottom however few rows there are.
+func stackedPanelBody(filterBoxView string, rows []string, rowCount int, panelFooter string, panelContentWidth int) string {
+	paddedRows := append(slices.Clone(rows), make([]string, max(rowCount-len(rows), 0))...)
+	rule := panelBorderStyle.Render(strings.Repeat("┄", panelContentWidth))
+	return strings.Join([]string{filterBoxView, strings.Join(paddedRows, "\n"), rule, panelFooter}, "\n")
+}
+
+// providerLines are the provider rows to draw, or, when there are none, why.
+func (m WatchPickerModel) providerLines() []string {
 	switch {
 	case m.providersErr != nil:
-		lines = append(lines, errorStyle.Render(errorMessage(m.providersErr)))
+		return []string{errorStyle.Render(errorMessage(m.providersErr))}
 	case !m.providersLoaded:
-		lines = append(lines, loadingText)
+		return []string{loadingText}
 	case len(m.visibleProviders()) == 0:
-		lines = append(lines, "No providers match.")
-	default:
-		lines = append(lines, m.providerRows()...)
+		return []string{"No providers match."}
 	}
-	return lipgloss.NewStyle().Width(m.providersWidth()).Render(strings.Join(lines, "\n"))
+	return m.providerRows()
 }
 
 func (m WatchPickerModel) providerNameWidth() int {
@@ -120,18 +224,6 @@ func (m WatchPickerModel) providerRows() []string {
 		rows = append(rows, marker+name+columnGap+mutedStyle.Render(m.watchedText(provider)))
 	}
 	return rows
-}
-
-func (m WatchPickerModel) componentsView() string {
-	provider, ok := m.providerAtCursor()
-	if !ok {
-		return paneTitle("Components", m.focusedPane == componentsPane)
-	}
-	lines := []string{
-		paneTitle(provider.Name+" components", m.focusedPane == componentsPane),
-		m.componentsFilter.line("/ to filter by name or group"),
-	}
-	return strings.Join(append(lines, m.componentLines()...), "\n")
 }
 
 // componentLines are the rows to draw under the filter line, or, when there are none, why.
@@ -221,13 +313,6 @@ func columnWidths(components []api.Component) (nameWidth, statusWidth int) {
 		statusWidth = max(statusWidth, lipgloss.Width(statusLabel(component.Status)))
 	}
 	return nameWidth, statusWidth
-}
-
-func paneTitle(title string, isFocused bool) string {
-	if isFocused {
-		return titleStyle.Foreground(colorBlue).Render(title)
-	}
-	return mutedStyle.Render(title)
 }
 
 // visibleRange is the slice of total rows to draw so the cursor stays in view.

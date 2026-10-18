@@ -1,14 +1,13 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
-
-// filteringHelpText is the help line while a filter box has the focus.
-const filteringHelpText = "type to filter · ⏎ keep · esc clear"
 
 // paneFilter is the text box that narrows one pane's list as the user types.
 type paneFilter struct {
@@ -73,7 +72,41 @@ func (f paneFilter) line(hint string) string {
 	case f.active:
 		return f.input.View()
 	case f.isNarrowing():
-		return mutedStyle.Render("Filter: " + f.query + " (esc clears)")
+		return mutedStyle.Render("Filter: " + f.query)
 	}
 	return mutedStyle.Render(hint)
+}
+
+// filteringHints are the key hints while a filter box has the focus.
+var filteringHints = []keyHint{{"type", "to filter"}, {"⏎", "keep"}, {"esc", "clear"}}
+
+// minFilterBoxGap is the least space between the filter and the match count in its box.
+const minFilterBoxGap = 1
+
+// filterBox is the filter in a box of its own, width cells wide, with how many items match at the
+// right while a query is being typed or kept, and what they match on when there is room. The box
+// takes the accent colour while it has the focus.
+func filterBox(filter paneFilter, placeholder string, matchCount int, scope string, width int) string {
+	lineWidth, _ := panelContentSize(width, oneLineBoxHeight)
+	left := filter.line(placeholder)
+	right := ""
+	if filter.active || filter.isNarrowing() {
+		right = matchCountText(matchCount, scope)
+		if lipgloss.Width(left)+minFilterBoxGap+lipgloss.Width(right) > lineWidth {
+			right = matchCountText(matchCount, "")
+		}
+	}
+	return panelWithLook(untintedPanelLook(filter.active), "", headerBar(left, mutedStyle.Render(right), lineWidth), width, oneLineBoxHeight)
+}
+
+// matchCountText is "3 matches · name or group"; without a scope, just the count.
+func matchCountText(count int, scope string) string {
+	text := fmt.Sprintf("%d matches", count)
+	if count == 1 {
+		text = "1 match"
+	}
+	if scope == "" {
+		return text
+	}
+	return text + " · " + scope
 }

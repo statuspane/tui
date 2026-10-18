@@ -18,7 +18,6 @@ const (
 	// The panes share the width in these proportions.
 	incidentsPaneParts  = 11
 	componentsPaneParts = 10
-	paneGapWidth        = 2
 	moreHintLines       = 1
 )
 
@@ -193,18 +192,18 @@ func (m AppDetailModel) View() tea.View {
 
 	header := headerBar(m.headerLeft(), m.headerRight(), layout.contentWidth)
 	panes := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.componentsPanel(layout.componentsWidth, layout.paneHeight), strings.Repeat(" ", paneGapWidth), m.incidentsPanel(layout.incidentsWidth, layout.paneHeight))
+		m.componentsPanel(layout.componentsWidth, layout.panelHeight), strings.Repeat(" ", panelGapWidth), m.incidentsPanel(layout.incidentsWidth, layout.panelHeight))
 	return tea.NewView(stackedScreen(header, panes, footerBar(detailHints, m.footerTrailing(), layout.contentWidth)))
 }
 
 // paneLayout is how the window is shared out: the width inside the margin, each pane's width and
 // the panes' height.
-type paneLayout struct{ contentWidth, incidentsWidth, componentsWidth, paneHeight int }
+type paneLayout struct{ contentWidth, incidentsWidth, componentsWidth, panelHeight int }
 
 func (m AppDetailModel) paneLayout() paneLayout {
 	windowWidth, windowHeight := withFallbackSize(m.windowWidth, m.windowHeight)
 	contentWidth := layoutWidth(windowWidth)
-	paneSpace := contentWidth - paneGapWidth
+	paneSpace := contentWidth - panelGapWidth
 	incidentsWidth := paneSpace * incidentsPaneParts / (incidentsPaneParts + componentsPaneParts)
 	return paneLayout{contentWidth, incidentsWidth, paneSpace - incidentsWidth, bodyHeight(windowHeight)}
 }
@@ -289,14 +288,14 @@ func (m AppDetailModel) scrolled(scroll func(*viewport.Model)) AppDetailModel {
 // components are laid out to their pane's width.
 func (m AppDetailModel) sizedToWindow() AppDetailModel {
 	layout := m.paneLayout()
-	m.incidentsViewport = sizedViewport(m.incidentsViewport, layout.incidentsWidth, layout.paneHeight)
-	m.componentsViewport = sizedViewport(m.componentsViewport, layout.componentsWidth, layout.paneHeight)
+	m.incidentsViewport = sizedViewport(m.incidentsViewport, layout.incidentsWidth, layout.panelHeight)
+	m.componentsViewport = sizedViewport(m.componentsViewport, layout.componentsWidth, layout.panelHeight)
 	return m.withViewportContents()
 }
 
 // sizedViewport fits a viewport inside a pane, leaving the last line for the "more" hint.
-func sizedViewport(paneViewport viewport.Model, paneWidth, paneHeight int) viewport.Model {
-	contentWidth, contentHeight := panelContentSize(paneWidth, paneHeight)
+func sizedViewport(paneViewport viewport.Model, paneWidth, panelHeight int) viewport.Model {
+	contentWidth, contentHeight := panelContentSize(paneWidth, panelHeight)
 	paneViewport.SetWidth(contentWidth)
 	paneViewport.SetHeight(max(contentHeight-moreHintLines, 1))
 	return paneViewport

@@ -22,6 +22,7 @@ var (
 	mutedStyle    = lipgloss.NewStyle().Foreground(colorMuted)
 	errorStyle    = lipgloss.NewStyle().Foreground(colorRed)
 
+	warningStyle = lipgloss.NewStyle().Foreground(colorYellow)
 	watchedStyle = lipgloss.NewStyle().Foreground(colorGreen)
 	addedStyle   = lipgloss.NewStyle().Foreground(colorBlue)
 	removedStyle = lipgloss.NewStyle().Foreground(colorRed)

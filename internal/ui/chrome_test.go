@@ -121,3 +121,14 @@ func TestWithFallbackSizeOnlyReplacesWhatIsNotKnown(t *testing.T) {
 		}
 	}
 }
+
+func TestAlertBarIsAFooterShapedBoxWithTheMessageInIt(t *testing.T) {
+	view := alertBar("Discard 2 changes?", 60)
+
+	assertViewContains(t, view, "Discard 2 changes?")
+	assertEveryLineHasWidth(t, view, 60)
+	assertHeightIs(t, view, footerHeight)
+	if !strings.Contains(view, escapeBefore(errorStyle.Render("x"))+"╭") {
+		t.Errorf("the edge should be red:\n%q", view)
+	}
+}

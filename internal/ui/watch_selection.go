@@ -127,6 +127,11 @@ func (s watchSelection) changeCount() int {
 	return changes
 }
 
+// chosenCount is how many components are chosen, across every provider.
+func (s watchSelection) chosenCount() int {
+	return len(s.chosen)
+}
+
 func (s watchSelection) chosenCountFor(providerSlug string) int {
 	count := 0
 	for key := range s.chosen {

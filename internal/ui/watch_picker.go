@@ -142,6 +142,9 @@ func (m WatchPickerModel) handleKey(keyPress tea.KeyPressMsg) (WatchPickerModel,
 
 	switch keyPress.String() {
 	case "esc":
+		if m.focusedFilter().isNarrowing() {
+			return m.clearFocusedFilter()
+		}
 		return m.cancelOrConfirmDiscard(wasConfirmingDiscard)
 	case "tab":
 		m.focusedPane = otherPane(m.focusedPane)

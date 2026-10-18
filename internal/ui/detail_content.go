@@ -158,12 +158,3 @@ func incidentsPanelLook(incidents []api.Incident, isFocused bool) panelLook {
 	tint := impactStyles[impactRank[worstRank]]
 	return panelLook{border: tint, title: tint.Bold(isFocused)}
 }
-
-// untintedPanelLook is the look of a pane that is not tinted by anything: the accent colour while
-// it has the focus, quiet otherwise.
-func untintedPanelLook(isFocused bool) panelLook {
-	if isFocused {
-		return panelLook{border: lipgloss.NewStyle().Foreground(colorBlue), title: accentStyle}
-	}
-	return defaultPanelLook
-}

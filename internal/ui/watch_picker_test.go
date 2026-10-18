@@ -84,6 +84,12 @@ func testCatalog() fakeProviderCatalog {
 	}
 }
 
+// The window the picker tests open in, unless they say otherwise.
+const (
+	testPickerWidth  = 100
+	testPickerHeight = 30
+)
+
 var (
 	keyTab    = tea.KeyPressMsg{Code: tea.KeyTab}
 	keySpace  = tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
@@ -107,7 +113,7 @@ func newTestPicker(backend fakePickerBackend, watched ...api.Component) WatchPic
 }
 
 func newTestPickerWithCache(backend fakePickerBackend, cache *componentCache, watched ...api.Component) WatchPickerModel {
-	return NewWatchPickerModel(backend, cache, openWatchPickerMsg{appSlug: "web-app", appName: "Web App", watchedComponents: watched}, 100, 30)
+	return NewWatchPickerModel(backend, cache, openWatchPickerMsg{appSlug: "web-app", appName: "Web App", watchedComponents: watched}, testPickerWidth, testPickerHeight)
 }
 
 // settleCursor lets the cursor rest where it is, which is what makes the picker ask the API about
@@ -221,7 +227,7 @@ func TestToggleMarksAnAdditionAndCountsTheChange(t *testing.T) {
 	m, _ = m.Update(keyJ)
 	m, _ = m.Update(keySpace)
 
-	assertViewContains(t, m.View().Content, "[x] API Requests", "[+] Pages", "1 change not saved yet")
+	assertViewContains(t, m.View().Content, "[x] API Requests", "[+] Pages", "1 unsaved change")
 }
 
 func TestToggleMarksARemovalAndTogglingBackClearsIt(t *testing.T) {
@@ -232,7 +238,7 @@ func TestToggleMarksARemovalAndTogglingBackClearsIt(t *testing.T) {
 	m, _ = m.Update(keySpace)
 
 	assertViewContains(t, m.View().Content, "[x] API Requests")
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestSpaceDoesNothingWhileTheProvidersHaveTheFocus(t *testing.T) {
@@ -240,7 +246,7 @@ func TestSpaceDoesNothingWhileTheProvidersHaveTheFocus(t *testing.T) {
 
 	m, _ = m.Update(keySpace)
 
-	assertViewLacks(t, m.View().Content, "not saved yet", "[-]")
+	assertViewLacks(t, m.View().Content, "unsaved change", "[-] API Requests")
 }
 
 func TestEnterOnTheProvidersMovesTheFocusToTheComponents(t *testing.T) {
@@ -730,13 +736,13 @@ func TestEnterKeepsTheProviderFilterAndTheKeysWorkAgain(t *testing.T) {
 
 	m, _ = m.Update(keyEnter)
 
-	assertViewContains(t, m.View().Content, "Filter: c (esc clears)", "Cloudflare")
+	assertViewContains(t, m.View().Content, "Filter: c", "Cloudflare")
 	assertViewLacks(t, m.View().Content, "GitHub")
 	m, fetch := settleCursor(m)
 	m = settle(m, fetch)
 	m, _ = m.Update(keyTab)
 	m, _ = m.Update(keySpace)
-	assertViewContains(t, m.View().Content, "[+] CDN", "1 change not saved yet")
+	assertViewContains(t, m.View().Content, "[+] CDN", "1 unsaved change")
 }
 
 func TestEscapeInTheProviderFilterClearsItAndPutsTheCursorOnTheFirstProvider(t *testing.T) {
@@ -851,7 +857,7 @@ func TestEnterKeepsTheComponentFilterAndSpaceActsOnTheFilteredRow(t *testing.T) 
 	m, _ = m.Update(keyEnter)
 	m, _ = m.Update(keySpace)
 
-	assertViewContains(t, m.View().Content, "Filter: pag", "[+] Pages", "1 change not saved yet")
+	assertViewContains(t, m.View().Content, "Filter: pag", "[+] Pages", "1 unsaved change")
 	assertViewLacks(t, m.View().Content, "API Requests")
 }
 
@@ -1151,12 +1157,12 @@ func TestGTogglesTheWholeGroupAndAgainBringsItBack(t *testing.T) {
 	m := groupedPicker()
 
 	m, _ = m.Update(keyG)
-	assertViewContains(t, m.View().Content, "[+] API Requests", "[+] Git Operations", "Core  2/2 watched", "2 changes not saved yet")
+	assertViewContains(t, m.View().Content, "[+] API Requests", "[+] Git Operations", "Core  2/2 watched", "2 unsaved changes")
 	assertViewLacks(t, m.View().Content, "[+] Webhooks")
 	m, _ = m.Update(keyG)
 
 	assertViewContains(t, m.View().Content, "[ ] API Requests", "[ ] Git Operations", "Core  0/2 watched")
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestGChoosesTheRestOfAGroupThatIsPartlyChosen(t *testing.T) {
@@ -1164,7 +1170,7 @@ func TestGChoosesTheRestOfAGroupThatIsPartlyChosen(t *testing.T) {
 
 	m, _ = m.Update(keyG)
 
-	assertViewContains(t, m.View().Content, "[x] API Requests", "[+] Git Operations", "Core  2/2 watched", "1 change not saved yet")
+	assertViewContains(t, m.View().Content, "[x] API Requests", "[+] Git Operations", "Core  2/2 watched", "1 unsaved change")
 }
 
 func TestGUnchoosesAGroupThatIsFullyWatched(t *testing.T) {
@@ -1172,7 +1178,7 @@ func TestGUnchoosesAGroupThatIsFullyWatched(t *testing.T) {
 
 	m, _ = m.Update(keyG)
 
-	assertViewContains(t, m.View().Content, "[-] API Requests", "[-] Git Operations", "Core  0/2 watched", "2 changes not saved yet")
+	assertViewContains(t, m.View().Content, "[-] API Requests", "[-] Git Operations", "Core  0/2 watched", "2 unsaved changes")
 }
 
 func TestGActsOnlyOnTheComponentsAFilterLetsThrough(t *testing.T) {
@@ -1215,7 +1221,7 @@ func TestGChoosesAGroupWhoseWatchedComponentWasUnwatched(t *testing.T) {
 	m, _ = m.Update(keyG)
 
 	assertViewContains(t, m.View().Content, "[x] API Requests", "[x] Git Operations", "Core  2/2 watched")
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestGWorksFromTheFirstAndTheLastComponentOfAGroup(t *testing.T) {
@@ -1245,7 +1251,7 @@ func TestGDoesNothingOutsideTheComponentsPane(t *testing.T) {
 
 	m, _ = m.Update(keyG)
 
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestGBeforeTheComponentsHaveLoadedDoesNothing(t *testing.T) {
@@ -1257,7 +1263,7 @@ func TestGBeforeTheComponentsHaveLoadedDoesNothing(t *testing.T) {
 	m, _ = m.Update(keyG)
 
 	assertViewContains(t, m.View().Content, "Loading…")
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestSavingAfterGSendsTheWholeSetIncludingOtherGroupsAndProviders(t *testing.T) {
@@ -1306,4 +1312,69 @@ func TestAGroupedListScrollsWithTheCursorAndTheHeadingsTakeRows(t *testing.T) {
 
 	assertViewContains(t, m.View().Content, "▸ [ ] C5")
 	assertViewLacks(t, m.View().Content, "A0")
+}
+
+func TestEscapeClearsAKeptComponentFilterInsteadOfClosingThePicker(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+	m, _ = m.Update(keyEnter)
+
+	m, cmd := m.Update(keyEscape)
+
+	assertNoSideEffects(t, cmd)
+	assertViewLacks(t, m.View().Content, "Filter:")
+	assertViewContains(t, m.View().Content, "API Requests", "Pages")
+}
+
+func TestEscapeClearsAKeptProviderFilterInsteadOfClosingThePicker(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "cloud")
+	m, _ = m.Update(keyEnter)
+
+	m, cmd := m.Update(keyEscape)
+
+	assertNoSideEffects(t, cmd)
+	assertViewLacks(t, m.View().Content, "Filter:")
+	assertViewContains(t, m.View().Content, "GitHub", "Cloudflare")
+}
+
+func TestEscapeClosesThePickerOnceNoFilterIsKept(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+	m, _ = m.Update(keyEnter)
+	m, _ = m.Update(keyEscape)
+
+	_, cmd := m.Update(keyEscape)
+
+	if _, closed := cmd().(closeWatchPickerMsg); !closed {
+		t.Fatal("the second esc should close the picker")
+	}
+}
+
+func TestOnlyTheFocusedPanesKeptFilterIsClearedByEscape(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "cloud")
+	m, _ = m.Update(keyEnter)
+	m, _ = m.Update(keyTab)
+
+	_, cmd := m.Update(keyEscape)
+
+	if _, closed := cmd().(closeWatchPickerMsg); !closed {
+		t.Fatal("esc on the components pane must not touch the providers filter")
+	}
+}
+
+func TestTheKeyBarSaysWhatEscapeDoes(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	assertViewContains(t, m.View().Content, "esc cancel")
+
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+	m, _ = m.Update(keyEnter)
+	assertViewContains(t, m.View().Content, "esc clear filter")
+	assertViewLacks(t, m.View().Content, "esc cancel")
 }
