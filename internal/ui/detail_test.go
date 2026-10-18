@@ -206,6 +206,26 @@ func TestDetailDAsksToDeleteTheApp(t *testing.T) {
 	}
 }
 
+func TestDetailEAsksToRenameTheApp(t *testing.T) {
+	m := newTestDetailModel()
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+
+	_, cmd := sendDetail(m, tea.KeyPressMsg{Code: 'e', Text: "e"})
+
+	request, ok := cmd().(openRenameAppDialogMsg)
+	if !ok || request.slug != "web-app" || request.name != "Web App" {
+		t.Fatalf("got %#v", request)
+	}
+}
+
+func TestDetailEDoesNothingBeforeTheAppHasLoaded(t *testing.T) {
+	_, cmd := sendDetail(newTestDetailModel(), tea.KeyPressMsg{Code: 'e', Text: "e"})
+
+	if cmd != nil {
+		t.Fatal("want no command")
+	}
+}
+
 func TestDetailDDoesNothingBeforeTheAppHasLoaded(t *testing.T) {
 	_, cmd := sendDetail(newTestDetailModel(), tea.KeyPressMsg{Code: 'd', Text: "d"})
 

@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -16,11 +15,6 @@ import (
 type AppCreator interface {
 	CreateApp(ctx context.Context, name string, refs []api.ComponentRef) (api.AppDetail, error)
 }
-
-const (
-	maxAppNameLength = 100
-	nameField        = "name"
-)
 
 // openCreateAppDialogMsg asks the root model to show the dialog that creates an app.
 type openCreateAppDialogMsg struct{}
@@ -38,12 +32,8 @@ type createAppDialog struct {
 }
 
 func newCreateAppDialog(appCreator AppCreator) (createAppDialog, tea.Cmd) {
-	input := textinput.New()
-	input.Prompt = ""
+	input, focusCmd := newNameInput("")
 	input.Placeholder = "Storefront"
-	input.CharLimit = maxAppNameLength
-	input.SetWidth(inputWidth)
-	focusCmd := input.Focus()
 	return createAppDialog{appCreator: appCreator, input: input}, focusCmd
 }
 
@@ -86,13 +76,12 @@ func (d createAppDialog) handleKey(keyPress tea.KeyPressMsg) (dialog, tea.Cmd) {
 }
 
 func (d createAppDialog) view() string {
-	length := len([]rune(d.input.Value()))
 	lines := []string{
 		titleStyle.Render("New app"),
 		"",
 		mutedStyle.Render("Name"),
 		d.input.View(),
-		mutedStyle.Render(nameLengthText(length)),
+		mutedStyle.Render(nameLengthText(d.input.Value())),
 	}
 	switch {
 	case d.isSubmitting:
@@ -115,8 +104,4 @@ func createApp(appCreator AppCreator, name string) tea.Cmd {
 		}
 		return appCreatedMsg{appDetail: appDetail}
 	}
-}
-
-func nameLengthText(length int) string {
-	return fmt.Sprintf("%d / %d", length, maxAppNameLength)
 }

@@ -6,6 +6,11 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Rename an app with `e`, from the apps list or from the app screen: a dialog starts with the
+  current name and `enter` saves it.
+
 ## [0.3.0] - 2026-10-17
 
 A more comfortable component picker: filter as you type, see groups, and spot what you chose.

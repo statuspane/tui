@@ -238,6 +238,30 @@ func TestDAsksToDeleteTheSelectedApp(t *testing.T) {
 	}
 }
 
+func TestEAsksToRenameTheSelectedApp(t *testing.T) {
+	m := newTestAppsModel()
+	m, _ = send(m, appsLoadedMsg{apps: []api.App{{Name: "First", Slug: "first"}, {Name: "Second", Slug: "second"}}})
+	m = pressRune(m, 'j')
+
+	_, cmd := send(m, tea.KeyPressMsg{Code: 'e', Text: "e"})
+
+	request, ok := cmd().(openRenameAppDialogMsg)
+	if !ok || request.slug != "second" || request.name != "Second" {
+		t.Fatalf("got %#v", request)
+	}
+}
+
+func TestEOnAnEmptyListDoesNothing(t *testing.T) {
+	m := newTestAppsModel()
+	m, _ = send(m, appsLoadedMsg{})
+
+	_, cmd := send(m, tea.KeyPressMsg{Code: 'e', Text: "e"})
+
+	if cmd != nil {
+		t.Fatal("want no command")
+	}
+}
+
 func TestDOnAnEmptyListDoesNothing(t *testing.T) {
 	m := newTestAppsModel()
 	m, _ = send(m, appsLoadedMsg{})

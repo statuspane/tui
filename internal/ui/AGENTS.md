@@ -32,6 +32,10 @@ detail, or a dialog (`createAppDialog`, `deleteAppDialog`) instead of any of the
 - `appsChangedMsg` during a fetch can't start a second one, because the first may predate the
   change: `AppsModel` sets `reloadAfterLoad` and fetches again right after it lands.
 - Deleting an app that is already gone (404) counts as success.
+- A rename can change the app's slug. `appRenamedMsg` carries the slug it was sent for
+  (`previousSlug`) so the root can find the open app screen, which then takes the response's
+  slug, name and content like a freshly loaded app. An unchanged name closes the rename dialog
+  without a request; a blank one leaves it open, as in the create dialog.
 - The picker keeps a pure `watchSelection`: the components the app watches now (baseline) and
   the chosen set. The API replaces the whole watched set on save, so what is sent is the whole
   chosen set, including components of providers that were never opened; never build the request
