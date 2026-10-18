@@ -1,6 +1,10 @@
 package ui
 
-import "charm.land/lipgloss/v2"
+import (
+	"image/color"
+
+	"charm.land/lipgloss/v2"
+)
 
 // ANSI palette indexes, so the terminal's own theme decides the exact shades.
 var (
@@ -22,9 +26,20 @@ var (
 	addedStyle   = lipgloss.NewStyle().Foreground(colorBlue)
 	removedStyle = lipgloss.NewStyle().Foreground(colorRed)
 
+	// Roles of the shared screen chrome: panel edges and titles, and the keys in the footer.
+	accentStyle      = lipgloss.NewStyle().Bold(true).Foreground(colorBlue)
+	panelBorderStyle = lipgloss.NewStyle().Foreground(colorMuted)
+	keyStyle         = lipgloss.NewStyle().Bold(true)
+
 	// cursorRowStyle is the bar across the row under the cursor; reverse video works on any theme.
 	cursorRowStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
 )
+
+// rowTintColor is the subtle background of the selected row: a neutral grey, darker or lighter to
+// suit the terminal's background.
+func rowTintColor(hasDarkBackground bool) color.Color {
+	return lipgloss.LightDark(hasDarkBackground)(lipgloss.Color("254"), lipgloss.Color("236"))
+}
 
 // Keyed by the API's incident impact levels.
 var impactStyles = map[string]lipgloss.Style{

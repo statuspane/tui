@@ -35,7 +35,7 @@ func NewRootModel(backend Backend) RootModel {
 }
 
 func (m RootModel) Init() tea.Cmd {
-	return m.apps.Init()
+	return tea.Batch(m.apps.Init(), tea.RequestBackgroundColor)
 }
 
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -188,7 +188,15 @@ func (m RootModel) updateActiveScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// View takes the whole terminal: the screens are laid out to the window size, and a frame as
+// tall as the window would otherwise scroll the shell's history.
 func (m RootModel) View() tea.View {
+	view := m.currentView()
+	view.AltScreen = true
+	return view
+}
+
+func (m RootModel) currentView() tea.View {
 	if m.picker != nil {
 		return m.picker.View()
 	}
