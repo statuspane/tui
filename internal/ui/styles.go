@@ -22,6 +22,11 @@ var (
 	addedStyle   = lipgloss.NewStyle().Foreground(colorBlue)
 	removedStyle = lipgloss.NewStyle().Foreground(colorRed)
 
+	// Roles of the shared screen chrome: panel edges and titles, and the keys in the footer.
+	accentStyle      = lipgloss.NewStyle().Bold(true).Foreground(colorBlue)
+	panelBorderStyle = lipgloss.NewStyle().Foreground(colorMuted)
+	keyStyle         = lipgloss.NewStyle().Bold(true)
+
 	// cursorRowStyle is the bar across the row under the cursor; reverse video works on any theme.
 	cursorRowStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
 )
