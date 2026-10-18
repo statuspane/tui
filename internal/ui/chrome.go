@@ -16,7 +16,10 @@ const (
 	minPanelHeight = 3
 
 	panelPadding = 1
-	hintGap      = "  "
+	// What a panel's border and padding take from the content: two edges, padding on both sides.
+	panelChromeWidth  = 2 + 2*panelPadding
+	panelChromeHeight = 2
+	hintGap           = "  "
 )
 
 // keyHint is one entry of the footer: the key and what it does.
@@ -30,13 +33,13 @@ func renderHint(hint keyHint) string {
 // top edge. Lines longer than the box are cut, shorter ones padded; the box never wraps.
 func panel(title, body string, width, height int) string {
 	width, height = max(width, minChromeWidth), max(height, minPanelHeight)
-	contentWidth := width - 2 - 2*panelPadding
+	contentWidth := width - panelChromeWidth
 
 	lines := make([]string, 0, height)
 	lines = append(lines, panelTop(title, width))
 	side := panelBorderStyle.Render("│")
 	bodyLines := strings.Split(body, "\n")
-	for row := range height - 2 {
+	for row := range height - panelChromeHeight {
 		content := ""
 		if row < len(bodyLines) {
 			content = clipTo(bodyLines[row], contentWidth)
@@ -73,7 +76,7 @@ func headerBar(left, right string, width int) string {
 // don't fit are dropped from the right, then trailing.
 func footerBar(hints []keyHint, trailing string, width int) string {
 	width = max(width, minChromeWidth)
-	contentWidth := width - 2 - 2*panelPadding
+	contentWidth := width - panelChromeWidth
 
 	shown := make([]string, len(hints))
 	for index, hint := range hints {

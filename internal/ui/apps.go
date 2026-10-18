@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -21,7 +22,16 @@ const (
 	selectionMarker   = "▸ "
 	noSelectionMarker = "  "
 	columnGap         = "  "
+
+	brandText      = "◉ STATUSPANE"
+	nameColumn     = "NAME"
+	statusColumn   = "STATUS"
+	watchingColumn = "WATCHING"
 )
+
+var appsHints = []keyHint{
+	{"↑↓", "move"}, {"enter", "open"}, {"n", "new app"}, {"e", "rename"}, {"d", "delete"}, {"r", "refresh"},
+}
 
 // AppLister is the one thing the screen needs from the API client; tests pass a fake.
 type AppLister interface {
@@ -52,6 +62,7 @@ type AppsModel struct {
 	refreshSequence int
 	reloadAfterLoad bool
 	spinner         spinner.Model
+	width, height   int
 }
 
 func NewAppsModel(appLister AppLister) AppsModel {
@@ -64,6 +75,10 @@ func (m AppsModel) Init() tea.Cmd {
 
 func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		return m, nil
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
@@ -173,54 +188,87 @@ func (m AppsModel) scheduleRefresh() (tea.Model, tea.Cmd) {
 }
 
 func (m AppsModel) View() tea.View {
-	screen := titleStyle.Render("StatusPane") + "\n\n" +
-		m.body() +
-		m.statusLines() +
-		"\n" + mutedStyle.Render("↑/↓ move · enter open · n new · e rename · d delete · r refresh · q quit") + "\n"
-	return tea.NewView(screen)
+	width, height := m.size()
+	header := headerBar(accentStyle.Render(brandText), statusSummary(m.apps), width)
+	panelBody := panel("Apps", m.panelBody(width-panelChromeWidth, bodyHeight(height)-panelChromeHeight), width, bodyHeight(height))
+	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, header, panelBody, footerBar(appsHints, m.footerTrailing(), width)))
 }
 
-func (m AppsModel) body() string {
+// size falls back to a classic 80x24 terminal until the window size is known.
+func (m AppsModel) size() (width, height int) {
+	return cmp.Or(m.width, fallbackWidth), cmp.Or(m.height, fallbackHeight)
+}
+
+func (m AppsModel) footerTrailing() string {
+	return mutedStyle.Render(fmt.Sprintf("refreshes every %ds · ", int(refreshInterval.Seconds()))) + renderHint(keyHint{"q", "quit"})
+}
+
+// panelBody is what goes inside the Apps panel: the list, or why there is none, and under it
+// the state of a refresh when apps are already on screen.
+func (m AppsModel) panelBody(contentWidth, rows int) string {
 	switch {
 	case !m.hasLoaded && m.err != nil:
-		return errorStyle.Render(errorMessage(m.err)) + "\n"
+		return errorStyle.Render(errorMessage(m.err))
 	case !m.hasLoaded:
-		return m.spinner.View() + " Loading apps…\n"
+		return m.spinner.View() + " Loading apps…"
 	case len(m.apps) == 0:
-		return "No apps yet. Press n to create one.\n"
+		return "No apps yet. Press n to create one."
 	}
-	return m.appRows()
+
+	status := m.refreshStatus()
+	listRows := rows
+	if status != "" {
+		listRows--
+	}
+	lines := m.listLines(contentWidth, listRows-1)
+	if status != "" {
+		lines = append(lines, status)
+	}
+	return strings.Join(lines, "\n")
 }
 
-// statusLines reports a failed or running refresh of apps that are already on screen.
-func (m AppsModel) statusLines() string {
-	var lines strings.Builder
-	if m.hasLoaded && m.err != nil {
-		lines.WriteString("\n" + errorStyle.Render("Refresh failed: "+errorMessage(m.err)) + "\n")
+// refreshStatus reports a failed or running refresh of apps that are already on screen.
+func (m AppsModel) refreshStatus() string {
+	switch {
+	case m.err != nil:
+		return errorStyle.Render("Refresh failed: " + errorMessage(m.err))
+	case m.isLoading:
+		return m.spinner.View() + " Refreshing…"
 	}
-	if m.hasLoaded && m.isLoading {
-		lines.WriteString("\n" + m.spinner.View() + " Refreshing…\n")
-	}
-	return lines.String()
+	return ""
 }
 
-func (m AppsModel) appRows() string {
-	nameWidth, statusWidth := 0, 0
+// listLines is the column header and as many rows as fit, scrolled to keep the selected one in view.
+func (m AppsModel) listLines(contentWidth, rows int) []string {
+	nameWidth, statusWidth := len(nameColumn), len(statusColumn)
 	for _, app := range m.apps {
 		nameWidth = max(nameWidth, lipgloss.Width(app.Name))
-		statusWidth = max(statusWidth, lipgloss.Width(statusLabel(app.Status)))
+		statusWidth = max(statusWidth, lipgloss.Width(bullet+statusLabel(app.Status)))
 	}
 
-	var rows strings.Builder
-	for index, app := range m.apps {
-		marker, name := noSelectionMarker, fmt.Sprintf("%-*s", nameWidth, app.Name)
-		if index == m.selectedIndex {
-			marker, name = selectionMarker, selectedStyle.Render(name)
-		}
-		components := mutedStyle.Render(fmt.Sprintf("%d components", app.WatchedComponentsCount))
-		rows.WriteString(marker + name + columnGap + renderStatus(app.Status, statusWidth) + columnGap + components + "\n")
+	lines := []string{mutedStyle.Render(noSelectionMarker + padRight(nameColumn, nameWidth) + columnGap + padRight(statusColumn, statusWidth) + columnGap + watchingColumn)}
+	start, end := visibleRange(len(m.apps), m.selectedIndex, max(rows, 1))
+	for index := start; index < end; index++ {
+		lines = append(lines, m.appRow(m.apps[index], index == m.selectedIndex, nameWidth, statusWidth, contentWidth))
 	}
-	return rows.String()
+	return lines
+}
+
+// appRow pads each column as plain text before styling it. The selected row is one bar built
+// from plain text: styles nested inside a bar would end it early.
+func (m AppsModel) appRow(app api.App, isSelected bool, nameWidth, statusWidth, contentWidth int) string {
+	name := padRight(app.Name, nameWidth)
+	status := padRight(bullet+statusLabel(app.Status), statusWidth)
+	components := fmt.Sprintf("%d components", app.WatchedComponentsCount)
+
+	if isSelected {
+		return cursorRowStyle.Render(padRight(selectionMarker+name+columnGap+status+columnGap+components, contentWidth))
+	}
+	return noSelectionMarker + name + columnGap + appearanceOf(app.Status).style.Render(status) + columnGap + mutedStyle.Render(components)
+}
+
+func padRight(text string, width int) string {
+	return text + strings.Repeat(" ", max(width-lipgloss.Width(text), 0))
 }
 
 func fetchApps(appLister AppLister) tea.Cmd {

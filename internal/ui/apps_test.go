@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -204,17 +205,127 @@ func TestStatusColumnsAlignWhenStyled(t *testing.T) {
 		{Name: "Delta", Status: nil, WatchedComponentsCount: 1},
 	}})
 
-	var rowWidths []int
-	for _, line := range strings.Split(m.appRows(), "\n") {
-		if line != "" {
-			rowWidths = append(rowWidths, lipgloss.Width(line))
+	var columns []int
+	for _, line := range m.listLines(76, 10) {
+		text := plain(t, line)
+		if index := strings.Index(text, " component"); index >= 0 {
+			columns = append(columns, lipgloss.Width(text[:index]))
 		}
 	}
-	for _, width := range rowWidths {
-		if width != rowWidths[0] {
-			t.Fatalf("row widths differ: %v", rowWidths)
+	if len(columns) != 3 {
+		t.Fatalf("want 3 rows with a component count, got %v", columns)
+	}
+	for _, column := range columns {
+		if column != columns[0] {
+			t.Fatalf("component columns differ: %v", columns)
 		}
 	}
+}
+
+func sizedAppsModel(width, height int, apps ...api.App) AppsModel {
+	m := newTestAppsModel()
+	m, _ = send(m, tea.WindowSizeMsg{Width: width, Height: height})
+	m, _ = send(m, appsLoadedMsg{apps: apps})
+	return m
+}
+
+func TestAppsScreenIsFramedAndFillsTheWindow(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "Web App", Status: stringPtr("operational")})
+
+	view := m.View().Content
+	assertViewContains(t, view, "◉ STATUSPANE", "╭─ Apps ─", "NAME", "STATUS", "WATCHING", "refreshes every 30s", "q quit")
+	assertEveryLineIs(t, view, 100)
+	if got := len(strings.Split(view, "\n")); got != 30 {
+		t.Fatalf("height = %d, want 30", got)
+	}
+}
+
+func TestAppsScreenFallsBackToAClassicTerminalBeforeTheSizeIsKnown(t *testing.T) {
+	m := newTestAppsModel()
+
+	assertEveryLineIs(t, m.View().Content, fallbackWidth)
+}
+
+func TestAppsHeaderSummarisesHowManyAppsAreInEachStatus(t *testing.T) {
+	m := sizedAppsModel(100, 30,
+		api.App{Name: "A", Status: stringPtr("degraded_performance")},
+		api.App{Name: "B", Status: stringPtr("operational")},
+		api.App{Name: "C", Status: stringPtr("operational")},
+		api.App{Name: "D", Status: stringPtr("under_maintenance")},
+		api.App{Name: "E"},
+	)
+
+	header := plain(t, strings.Split(m.View().Content, "\n")[0])
+	for _, want := range []string{"2 operational", "1 maintenance", "1 degraded", "1 pending"} {
+		if !strings.Contains(header, want) {
+			t.Errorf("header missing %q: %q", want, header)
+		}
+	}
+	if strings.Index(header, "operational") > strings.Index(header, "degraded") {
+		t.Errorf("want calmer statuses first: %q", header)
+	}
+}
+
+func TestAppsFooterOffersEveryAppAction(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
+
+	assertViewContains(t, m.View().Content, "enter open", "n new app", "e rename", "d delete", "r refresh")
+}
+
+func TestSelectedAppIsMarkedAndTheOthersAreNot(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "First"}, api.App{Name: "Second"})
+	m = pressRune(m, 'j')
+
+	view := plain(t, m.View().Content)
+	if !strings.Contains(view, "▸ Second") || strings.Contains(view, "▸ First") {
+		t.Fatalf("view = %s", view)
+	}
+}
+
+func TestStatesBeforeTheFirstLoadAreInsideTheFrame(t *testing.T) {
+	loading := newTestAppsModel()
+	failed, _ := send(newTestAppsModel(), appsFailedMsg{err: errors.New("boom")})
+	empty, _ := send(newTestAppsModel(), appsLoadedMsg{})
+
+	for _, m := range []AppsModel{loading, failed, empty} {
+		view := m.View().Content
+		assertViewContains(t, view, "╭─ Apps ─", "q quit")
+		assertEveryLineIs(t, view, fallbackWidth)
+	}
+}
+
+func TestRefreshStatusSitsInsideThePanelUnderTheList(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
+	m, _ = send(m, appsFailedMsg{err: errors.New("connection refused")})
+
+	view := m.View().Content
+	assertViewContains(t, view, "Web App", "Refresh failed: connection refused")
+	assertEveryLineIs(t, view, 100)
+}
+
+func TestLongListScrollsToKeepTheSelectedAppInView(t *testing.T) {
+	var apps []api.App
+	for index := range 40 {
+		apps = append(apps, api.App{Name: fmt.Sprintf("App %02d", index)})
+	}
+	m := sizedAppsModel(100, 16, apps...)
+	for range 30 {
+		m = pressRune(m, 'j')
+	}
+
+	view := m.View().Content
+	assertViewContains(t, view, "▸ App 30")
+	assertViewLacks(t, view, "App 00")
+	if got := len(strings.Split(view, "\n")); got != 16 {
+		t.Fatalf("height = %d, want 16", got)
+	}
+}
+
+func TestResizingRedrawsAtTheNewWidth(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
+	m, _ = send(m, tea.WindowSizeMsg{Width: 60, Height: 20})
+
+	assertEveryLineIs(t, m.View().Content, 60)
 }
 
 func TestNAsksForTheCreateDialog(t *testing.T) {
