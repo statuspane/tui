@@ -39,6 +39,15 @@ viewport keeps its scroll offset when its content changes, which is what keeps a
 sending a pane back to the top. The incidents panel is tinted by the worst active incident
 (`incidentsPanelLook`) and shows focus as a bold title only, so the tint is never lost.
 
+The picker is two panels too (`pickerLayout`): the providers one as wide as its names need, at
+most half the width, and each has a bordered filter box, its rows padded to `rowCount` lines, a
+rule and a footer line. `rowCount` is the panel height minus `pickerPaneChromeHeight`, and the
+panels are never shorter than room for `minPickerRows`, so a short window still shows the cursor
+row (the screen then runs past the window and is cut at the bottom). Anything too long for the
+header, like the discard question or a save error, goes in the `alertBar` that replaces the key
+bar. The key hints are dropped from the right when they don't fit, so keep the likeliest ones
+first and the labels short.
+
 ## Gotchas
 
 - While a dialog is open, `RootModel` sends it every key press and the screens none, so typing

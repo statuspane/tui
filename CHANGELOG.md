@@ -20,6 +20,11 @@ All notable user-facing changes are listed here. The format follows
   scrolls on its own (`tab` moves between them) and says how many lines are below. The incidents
   pane takes the colour of the worst active incident, and the header shows the app's status and
   how long ago it was checked.
+- The component picker has the same framed layout: the providers and the provider's components
+  in two panels, each with its filter in a box that counts the matches, a footer with how many
+  components you watch in total and a legend for the markers, and a header that says how many
+  changes are unsaved. The question about discarding changes and a failed save show in a red box
+  in place of the key bar.
 - The TUI now runs in the terminal's alternate screen, so quitting gives you your shell back as
   it was.
 
