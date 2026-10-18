@@ -255,7 +255,12 @@ func TestAppsHeaderSummarisesHowManyAppsAreInEachStatus(t *testing.T) {
 		api.App{Name: "E"},
 	)
 
-	header := plain(t, strings.Split(m.View().Content, "\n")[0])
+	var header string
+	for _, line := range strings.Split(plain(t, m.View().Content), "\n") {
+		if strings.Contains(line, "STATUSPANE") {
+			header = line
+		}
+	}
 	for _, want := range []string{"2 operational", "1 maintenance", "1 degraded", "1 pending"} {
 		if !strings.Contains(header, want) {
 			t.Errorf("header missing %q: %q", want, header)
@@ -421,7 +426,7 @@ func TestAppsChangedDuringALoadReloadsRightAfterIt(t *testing.T) {
 func TestColumnHeaderHasARuleUnderIt(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
 
-	assertViewContains(t, m.View().Content, "│ "+strings.Repeat("─", 96)+" │")
+	assertViewContains(t, m.View().Content, "│  "+strings.Repeat("─", 90)+"  │")
 }
 
 func TestStatusAndWatchingColumnsSitAtTheRightOfTheRow(t *testing.T) {
@@ -435,7 +440,7 @@ func TestStatusAndWatchingColumnsSitAtTheRightOfTheRow(t *testing.T) {
 			}
 		}
 	}
-	if len(columns) != 2 || columns[0] != columns[1] || columns[0] < 80 {
+	if len(columns) != 2 || columns[0] != columns[1] || columns[0] < 70 {
 		t.Fatalf("watching columns = %v, want both at the right edge", columns)
 	}
 }

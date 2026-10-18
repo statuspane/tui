@@ -7,6 +7,11 @@ import (
 )
 
 const (
+	// The screen sits inside a margin, and a blank line separates header, panel and footer.
+	screenMarginX = 2
+	screenMarginY = 1
+	sectionGap    = 1
+
 	headerHeight = 1
 	// footerHeight is one line of key hints inside a border.
 	footerHeight = 3
@@ -15,7 +20,7 @@ const (
 	minChromeWidth = 20
 	minPanelHeight = 3
 
-	panelPadding = 1
+	panelPadding = 2
 	// What a panel's border and padding take from the content: two edges, padding on both sides.
 	panelChromeWidth  = 2 + 2*panelPadding
 	panelChromeHeight = 2
@@ -94,9 +99,22 @@ func footerBar(hints []keyHint, trailing string, width int) string {
 	}
 }
 
+// layoutWidth is the width of the screen's content, inside the margin.
+func layoutWidth(screenWidth int) int {
+	return screenWidth - 2*screenMarginX
+}
+
 // bodyHeight is what is left of a screen height for the content between header and footer.
 func bodyHeight(screenHeight int) int {
-	return max(screenHeight-headerHeight-footerHeight, minPanelHeight)
+	taken := 2*screenMarginY + headerHeight + 2*sectionGap + footerHeight
+	return max(screenHeight-taken, minPanelHeight)
+}
+
+// screenLayout stacks the header, the body and the footer with a blank line between them,
+// inside the screen margin.
+func screenLayout(header, body, footer string) string {
+	stacked := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
+	return lipgloss.NewStyle().Padding(screenMarginY, screenMarginX).Render(stacked)
 }
 
 // clipTo cuts a possibly styled line to width cells, without a trailing ellipsis.

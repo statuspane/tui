@@ -200,10 +200,11 @@ func (m AppsModel) scheduleRefresh() (tea.Model, tea.Cmd) {
 }
 
 func (m AppsModel) View() tea.View {
-	width, height := m.size()
+	screenWidth, screenHeight := m.size()
+	width, panelHeight := layoutWidth(screenWidth), bodyHeight(screenHeight)
 	header := headerBar(accentStyle.Render(brandText), statusSummary(m.apps), width)
-	panelBody := panel("Apps", m.panelBody(width-panelChromeWidth, bodyHeight(height)-panelChromeHeight), width, bodyHeight(height))
-	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, header, panelBody, footerBar(appsHints, m.footerTrailing(), width)))
+	appsPanel := panel("Apps", m.panelBody(width-panelChromeWidth, panelHeight-panelChromeHeight), width, panelHeight)
+	return tea.NewView(screenLayout(header, appsPanel, footerBar(appsHints, m.footerTrailing(), width)))
 }
 
 // size falls back to a classic 80x24 terminal until the window size is known.

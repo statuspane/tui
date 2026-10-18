@@ -23,7 +23,7 @@ func TestPanelSetsTheTitleIntoTheTopEdge(t *testing.T) {
 	if !strings.HasPrefix(top, "╭─ Apps ─") || !strings.HasSuffix(top, "╮") {
 		t.Fatalf("top edge = %q", top)
 	}
-	assertViewContains(t, view, "│ hello")
+	assertViewContains(t, view, "│  hello")
 }
 
 func TestPanelIsExactlyTheSizeAsked(t *testing.T) {
@@ -99,9 +99,10 @@ func TestFooterBarDropsTrailingWhenNothingElseFits(t *testing.T) {
 	assertEveryLineIs(t, view, 24)
 }
 
-func TestBodyHeightLeavesRoomForHeaderAndFooter(t *testing.T) {
-	if got := bodyHeight(30); got != 30-headerHeight-footerHeight {
-		t.Fatalf("bodyHeight = %d", got)
+func TestBodyHeightLeavesRoomForMarginHeaderAndFooter(t *testing.T) {
+	// 30 lines less two margin lines, the header, two blank lines and the three-line footer.
+	if got := bodyHeight(30); got != 22 {
+		t.Fatalf("bodyHeight = %d, want 22", got)
 	}
 	if got := bodyHeight(2); got < minPanelHeight {
 		t.Fatalf("bodyHeight = %d, want at least %d", got, minPanelHeight)
