@@ -96,3 +96,28 @@ func TestBodyHeightNeverDropsBelowTheMinimumPanel(t *testing.T) {
 		t.Fatalf("bodyHeight = %d, want %d", got, minPanelHeight)
 	}
 }
+
+func TestPanelWithLookColoursTheEdgeAndTheTitle(t *testing.T) {
+	look := panelLook{border: errorStyle, title: titleStyle}
+
+	view := panelWithLook(look, "Apps", "x", 30, 4)
+
+	if !strings.Contains(view, escapeBefore(errorStyle.Render("x"))+"╭") {
+		t.Errorf("the edge does not use the border style:\n%q", view)
+	}
+	if !strings.Contains(view, escapeBefore(titleStyle.Render("x"))+"Apps") {
+		t.Errorf("the title does not use the title style:\n%q", view)
+	}
+}
+
+func TestWithFallbackSizeOnlyReplacesWhatIsNotKnown(t *testing.T) {
+	for _, test := range []struct{ width, height, wantWidth, wantHeight int }{
+		{0, 50, fallbackWidth, 50},
+		{70, 0, 70, fallbackHeight},
+		{70, 50, 70, 50},
+	} {
+		if width, height := withFallbackSize(test.width, test.height); width != test.wantWidth || height != test.wantHeight {
+			t.Errorf("withFallbackSize(%d, %d) = %dx%d, want %dx%d", test.width, test.height, width, height, test.wantWidth, test.wantHeight)
+		}
+	}
+}

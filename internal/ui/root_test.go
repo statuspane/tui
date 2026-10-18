@@ -321,7 +321,7 @@ func TestASavedSetClosesThePickerUpdatesTheDetailAndReloadsTheList(t *testing.T)
 
 	m, cmd := sendRoot(m, watchedComponentsSavedMsg{appDetail: saved})
 
-	if m.picker != nil || !strings.Contains(m.detail.viewport.GetContent(), "Actions Runner") {
+	if m.picker != nil || !strings.Contains(m.detail.componentsViewport.GetContent(), "Actions Runner") {
 		t.Fatalf("picker open = %v", m.picker != nil)
 	}
 	if !containsAppsChanged(collectMessages(cmd)) {

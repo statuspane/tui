@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -29,6 +30,10 @@ const (
 	// A panel's top edge around its title: "╭─ " before it, " " and "╮" after.
 	panelTitleFrameWidth = 5
 
+	// The size of a classic terminal, used until the window size is known.
+	fallbackWidth  = 80
+	fallbackHeight = 24
+
 	hintGap   = "  "
 	brandText = "◉ STATUSPANE"
 )
@@ -40,22 +45,31 @@ func renderHint(hint keyHint) string {
 	return keyStyle.Render(hint.key) + " " + mutedStyle.Render(hint.label)
 }
 
-// panel draws body in a rounded box of exactly width x height cells, with title set into the
-// top edge. Lines longer than the box are cut, shorter ones padded; the box never wraps.
+// panelLook is how a panel's edges and title are coloured.
+type panelLook struct{ border, title lipgloss.Style }
+
+var defaultPanelLook = panelLook{border: panelBorderStyle, title: accentStyle}
+
 func panel(title, body string, width, height int) string {
+	return panelWithLook(defaultPanelLook, title, body, width, height)
+}
+
+// panelWithLook draws body in a rounded box of exactly width x height cells, with title set into
+// the top edge. Lines longer than the box are cut, shorter ones padded; the box never wraps.
+func panelWithLook(look panelLook, title, body string, width, height int) string {
 	width, height = max(width, minChromeWidth), max(height, minPanelHeight)
 	contentWidth, contentHeight := panelContentSize(width, height)
 
-	lines := []string{panelTop(title, width)}
+	lines := []string{panelTop(look, title, width)}
 	bodyLines := strings.Split(body, "\n")
 	for row := range contentHeight {
 		bodyLine := ""
 		if row < len(bodyLines) {
 			bodyLine = clipTo(bodyLines[row], contentWidth)
 		}
-		lines = append(lines, panelRow(bodyLine, contentWidth))
+		lines = append(lines, panelRow(look, bodyLine, contentWidth))
 	}
-	lines = append(lines, panelBottom(width))
+	lines = append(lines, panelBottom(look, width))
 	return strings.Join(lines, "\n")
 }
 
@@ -64,22 +78,22 @@ func panelContentSize(width, height int) (contentWidth, contentHeight int) {
 	return width - panelChromeWidth, height - panelChromeHeight
 }
 
-func panelTop(title string, width int) string {
+func panelTop(look panelLook, title string, width int) string {
 	if title == "" {
-		return panelBorderStyle.Render("╭" + strings.Repeat("─", width-borderCells) + "╮")
+		return look.border.Render("╭" + strings.Repeat("─", width-borderCells) + "╮")
 	}
 	fill := width - panelTitleFrameWidth - lipgloss.Width(title)
-	return panelBorderStyle.Render("╭─ ") + accentStyle.Render(title) + panelBorderStyle.Render(" "+strings.Repeat("─", fill)+"╮")
+	return look.border.Render("╭─ ") + look.title.Render(title) + look.border.Render(" "+strings.Repeat("─", fill)+"╮")
 }
 
-func panelRow(bodyLine string, contentWidth int) string {
-	side := panelBorderStyle.Render("│")
+func panelRow(look panelLook, bodyLine string, contentWidth int) string {
+	side := look.border.Render("│")
 	margin := strings.Repeat(" ", panelPadding)
 	return side + margin + padRight(bodyLine, contentWidth) + margin + side
 }
 
-func panelBottom(width int) string {
-	return panelBorderStyle.Render("╰" + strings.Repeat("─", width-borderCells) + "╯")
+func panelBottom(look panelLook, width int) string {
+	return look.border.Render("╰" + strings.Repeat("─", width-borderCells) + "╯")
 }
 
 // headerBar is one line: left at the start, right at the end. Right is dropped when both
@@ -114,6 +128,11 @@ func footerLine(renderedHints []string, trailing string, contentWidth int) strin
 		}
 	}
 	return ""
+}
+
+// withFallbackSize replaces a size that is not known yet (zero) with a classic terminal's.
+func withFallbackSize(width, height int) (int, int) {
+	return cmp.Or(width, fallbackWidth), cmp.Or(height, fallbackHeight)
 }
 
 // layoutWidth is the width of the screen's content, inside the margin.

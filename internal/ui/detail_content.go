@@ -1,19 +1,25 @@
 package ui
 
 import (
-	"fmt"
+	"slices"
 	"strings"
 	"time"
+
+	"charm.land/lipgloss/v2"
 
 	"github.com/statuspane/tui/internal/api"
 )
 
 const (
-	bullet           = "● "
-	indent           = "  "
-	noImpactLabel    = "unrated"
-	noCheckYetLabel  = "not checked yet"
-	noIncidentsLabel = "No active incidents."
+	bullet            = "● "
+	indent            = "  "
+	noImpactLabel     = "unrated"
+	noCheckYetLabel   = "not checked yet"
+	noIncidentsLabel  = "No active incidents."
+	noComponentsLabel = "This app doesn't watch any components yet."
+
+	// The least space between a component's name and its status.
+	minComponentGap = 2
 )
 
 // componentGroup is the components of one provider that share a group name ("" for none).
@@ -46,24 +52,6 @@ func groupComponents(components []api.Component) []componentGroup {
 	return groups
 }
 
-func renderAppDetail(appDetail api.AppDetail, now time.Time) string {
-	var content strings.Builder
-	content.WriteString(titleStyle.Render(appDetail.Name) + "\n")
-	content.WriteString(renderStatus(appDetail.Status, 0) + mutedStyle.Render(" · "+checkedText(appDetail.LastCheckedAt, now)) + "\n\n")
-
-	content.WriteString(titleStyle.Render(fmt.Sprintf("Active incidents (%d)", len(appDetail.ActiveIncidents))) + "\n")
-	if len(appDetail.ActiveIncidents) == 0 {
-		content.WriteString(indent + noIncidentsLabel + "\n")
-	}
-	for _, incident := range appDetail.ActiveIncidents {
-		content.WriteString("\n" + renderIncident(incident, now))
-	}
-
-	content.WriteString("\n" + titleStyle.Render(fmt.Sprintf("Watched components (%d)", len(appDetail.WatchedComponents))) + "\n")
-	content.WriteString(renderComponents(appDetail.WatchedComponents))
-	return content.String()
-}
-
 func checkedText(lastCheckedAt *time.Time, now time.Time) string {
 	if lastCheckedAt == nil {
 		return noCheckYetLabel
@@ -89,48 +77,93 @@ func renderIncident(incident api.Incident, now time.Time) string {
 		details = append(details, "started "+ageText(now, *incident.StartedAt))
 	}
 
-	var lines strings.Builder
-	lines.WriteString(impactStyle.Render(bullet) + titleStyle.Render(incident.Title) + "\n")
-	lines.WriteString(indent + mutedStyle.Render(incident.Provider+" · ") + impactStyle.Render(strings.Join(details, " · ")) + "\n")
+	lines := []string{
+		impactStyle.Render(bullet) + titleStyle.Render(incident.Title),
+		indent + mutedStyle.Render(incident.Provider+" · ") + impactStyle.Render(strings.Join(details, " · ")),
+	}
 	if incident.LatestUpdate != nil && incident.LatestUpdate.Body != "" {
-		lines.WriteString(indent + incident.LatestUpdate.Body + "\n")
+		lines = append(lines, indent+incident.LatestUpdate.Body)
 	}
 	if len(incident.AffectedComponents) > 0 {
 		names := make([]string, len(incident.AffectedComponents))
 		for index, component := range incident.AffectedComponents {
 			names[index] = component.Name
 		}
-		lines.WriteString(indent + mutedStyle.Render("Affects: "+strings.Join(names, ", ")) + "\n")
+		lines = append(lines, indent+mutedStyle.Render("Affects: "+strings.Join(names, ", ")))
 	}
-	lines.WriteString(indent + mutedStyle.Render(incident.URL) + "\n")
-	return lines.String()
+	return strings.Join(append(lines, indent+mutedStyle.Render(incident.URL)), "\n")
 }
 
-func renderComponents(components []api.Component) string {
+// renderComponents lists the components under their provider and group, each with its status
+// label at the right edge of a pane width cells wide.
+func renderComponents(components []api.Component, width int) string {
 	if len(components) == 0 {
-		return indent + "This app doesn't watch any components yet.\n"
+		return noComponentsLabel
 	}
 
-	nameWidth, statusWidth := 0, 0
-	for _, component := range components {
-		nameWidth = max(nameWidth, len([]rune(component.Name)))
-		statusWidth = max(statusWidth, len([]rune(statusLabel(component.Status))))
-	}
-
-	var lines strings.Builder
+	var lines []string
 	previousProvider := ""
 	for _, group := range groupComponents(components) {
 		if group.provider != previousProvider {
-			lines.WriteString(indent + titleStyle.Render(group.provider) + "\n")
+			lines = append(lines, titleStyle.Render(group.provider))
 			previousProvider = group.provider
 		}
+		memberIndent := indent
 		if group.groupName != "" {
-			lines.WriteString(indent + indent + mutedStyle.Render(group.groupName) + "\n")
+			lines = append(lines, indent+mutedStyle.Render(group.groupName))
+			memberIndent = indent + indent
 		}
 		for _, component := range group.members {
-			name := fmt.Sprintf("%-*s", nameWidth, component.Name)
-			lines.WriteString(indent + indent + indent + name + columnGap + renderStatus(component.Status, statusWidth) + "\n")
+			lines = append(lines, componentRow(component, memberIndent, width))
 		}
 	}
-	return lines.String()
+	return strings.Join(lines, "\n")
+}
+
+// componentRow is "● Name" and the status label pushed to the right edge, in the status colour.
+func componentRow(component api.Component, memberIndent string, width int) string {
+	appearance := appearanceOf(component.Status)
+	gap := max(width-lipgloss.Width(memberIndent+bullet+component.Name)-lipgloss.Width(appearance.label), minComponentGap)
+	return memberIndent + appearance.style.Render(bullet) + component.Name + strings.Repeat(" ", gap) + appearance.style.Render(appearance.label)
+}
+
+// renderIncidents lists the active incidents, one after the other.
+func renderIncidents(incidents []api.Incident, now time.Time) string {
+	if len(incidents) == 0 {
+		return noIncidentsLabel
+	}
+	var rendered []string
+	for _, incident := range incidents {
+		rendered = append(rendered, renderIncident(incident, now))
+	}
+	return strings.Join(rendered, "\n\n")
+}
+
+// impactRank orders the incident impact levels from mild to severe.
+var impactRank = []string{"none", "minor", "major", "critical"}
+
+// incidentsPanelLook tints the incidents panel by the worst active incident: its border and
+// title take that impact's colour. Without incidents it looks like any other pane. Focus shows
+// as a bold title, so the tint is never replaced by the focus colour.
+func incidentsPanelLook(incidents []api.Incident, isFocused bool) panelLook {
+	worstRank := -1
+	for _, incident := range incidents {
+		if incident.Impact != nil {
+			worstRank = max(worstRank, slices.Index(impactRank, *incident.Impact))
+		}
+	}
+	if worstRank < 0 {
+		return untintedPanelLook(isFocused)
+	}
+	tint := impactStyles[impactRank[worstRank]]
+	return panelLook{border: tint, title: tint.Bold(isFocused)}
+}
+
+// untintedPanelLook is the look of a pane that is not tinted by anything: the accent colour while
+// it has the focus, quiet otherwise.
+func untintedPanelLook(isFocused bool) panelLook {
+	if isFocused {
+		return panelLook{border: lipgloss.NewStyle().Foreground(colorBlue), title: accentStyle}
+	}
+	return defaultPanelLook
 }

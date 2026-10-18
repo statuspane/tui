@@ -16,6 +16,10 @@ All notable user-facing changes are listed here. The format follows
 - The apps list has a new look: it fills the terminal in a framed layout, with a header that
   counts your apps in each status, a column header, and a bar of key hints (including the
   refresh interval) at the bottom. A long list scrolls to keep the selected app in view.
+- An app's screen shows its active incidents and its watched components side by side. Each pane
+  scrolls on its own (`tab` moves between them) and says how many lines are below. The incidents
+  pane takes the colour of the worst active incident, and the header shows the app's status and
+  how long ago it was checked.
 - The TUI now runs in the terminal's alternate screen, so quitting gives you your shell back as
   it was.
 

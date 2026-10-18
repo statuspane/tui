@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,15 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/statuspane/tui/internal/api"
+)
+
+// testWidth leaves room for the panes' text on one line; shortHeight is low enough that a
+// component list of tallListSize overflows its pane.
+const (
+	testWidth    = 140
+	testHeight   = 40
+	shortHeight  = 16
+	tallListSize = 30
 )
 
 var detailNow = time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
@@ -29,7 +39,7 @@ func (f fakeAppGetter) GetApp(_ context.Context, slug string) (api.AppDetail, er
 }
 
 func newTestDetailModel() AppDetailModel {
-	m := NewAppDetailModel(fakeAppGetter{}, "web-app", "Web App", 100, 40)
+	m := NewAppDetailModel(fakeAppGetter{}, "web-app", "Web App", testWidth, testHeight)
 	m.now = func() time.Time { return detailNow }
 	return m
 }
@@ -177,20 +187,20 @@ func TestDetailStaleTickIsIgnored(t *testing.T) {
 	}
 }
 
-func TestDetailScrollsWhenContentIsTallerThanTheWindow(t *testing.T) {
+func TestDetailScrollsTheComponentsWhenTheyAreTallerThanThePane(t *testing.T) {
 	appDetail := degradedAppDetail()
-	for index := range 30 {
+	for index := range tallListSize {
 		appDetail.WatchedComponents = append(appDetail.WatchedComponents, api.Component{
 			ComponentReference: api.ComponentReference{Provider: "github", ID: fmt.Sprint(index), Name: fmt.Sprintf("Component %02d", index)},
 		})
 	}
-	m := NewAppDetailModel(fakeAppGetter{}, "web-app", "Web App", 100, 12)
+	m := NewAppDetailModel(fakeAppGetter{}, "web-app", "Web App", testWidth, shortHeight)
 	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: appDetail})
 
 	m, _ = sendDetail(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
 
-	if m.viewport.YOffset() != 1 {
-		t.Fatalf("YOffset = %d, want 1", m.viewport.YOffset())
+	if m.componentsViewport.YOffset() != 1 {
+		t.Fatalf("YOffset = %d, want 1", m.componentsViewport.YOffset())
 	}
 }
 
@@ -251,5 +261,139 @@ func TestDetailWDoesNothingBeforeTheAppHasLoaded(t *testing.T) {
 
 	if cmd != nil {
 		t.Fatal("want no command")
+	}
+}
+
+func tallDetail() api.AppDetail {
+	appDetail := degradedAppDetail()
+	for index := range tallListSize {
+		appDetail.WatchedComponents = append(appDetail.WatchedComponents, namedComponent("github", fmt.Sprint(index), fmt.Sprintf("Component %02d", index), nil))
+	}
+	return appDetail
+}
+
+func TestDetailIsTwoTitledPanesThatFillTheWindow(t *testing.T) {
+	m := newTestDetailModel()
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+
+	view := m.View().Content
+	assertViewContains(t, view, "╭─ Active incidents (1)", "╭─ Watched components (2)", "◉ STATUSPANE › Web App", "checked 3m ago", "w watch components", "tab switch pane", "esc back")
+	assertEveryLineHasWidth(t, view, testWidth)
+	assertHeightIs(t, view, testHeight)
+}
+
+func TestDetailRedrawsAtTheNewWindowSize(t *testing.T) {
+	m := newTestDetailModel()
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+	m, _ = sendDetail(m, tea.WindowSizeMsg{Width: fallbackWidth, Height: fallbackHeight})
+
+	view := m.View().Content
+	assertEveryLineHasWidth(t, view, fallbackWidth)
+	assertHeightIs(t, view, fallbackHeight)
+}
+
+func tallDetailWithManyIncidents() api.AppDetail {
+	appDetail := tallDetail()
+	for range tallListSize {
+		appDetail.ActiveIncidents = append(appDetail.ActiveIncidents, appDetail.ActiveIncidents[0])
+	}
+	return appDetail
+}
+
+func TestScrollingMovesTheComponentsPaneFirst(t *testing.T) {
+	m := NewAppDetailModel(fakeAppGetter{}, "web-app", "Web App", testWidth, shortHeight)
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: tallDetailWithManyIncidents()})
+
+	m, _ = sendDetail(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+
+	if m.componentsViewport.YOffset() != 1 || m.incidentsViewport.YOffset() != 0 {
+		t.Fatalf("offsets = %d, %d: only the components should scroll", m.componentsViewport.YOffset(), m.incidentsViewport.YOffset())
+	}
+}
+
+func TestTabMovesTheScrollingToTheIncidentsPane(t *testing.T) {
+	m := NewAppDetailModel(fakeAppGetter{}, "web-app", "Web App", testWidth, shortHeight)
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: tallDetailWithManyIncidents()})
+
+	m, _ = sendDetail(m, tea.KeyPressMsg{Code: tea.KeyTab})
+	m, _ = sendDetail(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+
+	if m.componentsViewport.YOffset() != 0 || m.incidentsViewport.YOffset() != 1 {
+		t.Fatalf("offsets = %d, %d: only the incidents should scroll", m.componentsViewport.YOffset(), m.incidentsViewport.YOffset())
+	}
+}
+
+var moreHintText = regexp.MustCompile(`↓ \d+ more`)
+
+func scrolledToTheBottom(m AppDetailModel) AppDetailModel {
+	for !m.componentsViewport.AtBottom() {
+		m, _ = sendDetail(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+	}
+	return m
+}
+
+func TestAMoreHintShowsWhileThereIsMoreBelow(t *testing.T) {
+	m := NewAppDetailModel(fakeAppGetter{}, "web-app", "Web App", testWidth, shortHeight)
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: tallDetail()})
+
+	if !moreHintText.MatchString(plain(t, m.View().Content)) {
+		t.Fatal("a tall list should say there is more below")
+	}
+}
+
+func TestTheMoreHintGoesAwayAtTheBottom(t *testing.T) {
+	m := NewAppDetailModel(fakeAppGetter{}, "web-app", "Web App", testWidth, shortHeight)
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: tallDetail()})
+
+	if moreHintText.MatchString(plain(t, scrolledToTheBottom(m).View().Content)) {
+		t.Fatal("at the bottom there is nothing more to say")
+	}
+}
+
+func TestNoMoreHintWhenEverythingFits(t *testing.T) {
+	m := newTestDetailModel()
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+
+	if moreHintText.MatchString(plain(t, m.View().Content)) {
+		t.Fatal("nothing is hidden")
+	}
+}
+
+func TestARefreshKeepsEachPanesScrollPosition(t *testing.T) {
+	m := NewAppDetailModel(fakeAppGetter{}, "web-app", "Web App", testWidth, shortHeight)
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: tallDetail()})
+	for range 5 {
+		m, _ = sendDetail(m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+	}
+
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: tallDetail()})
+
+	if m.componentsViewport.YOffset() != 5 {
+		t.Fatalf("YOffset = %d, want 5", m.componentsViewport.YOffset())
+	}
+}
+
+func TestTheIncidentsPaneIsTintedByTheWorstIncident(t *testing.T) {
+	m := newTestDetailModel()
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+
+	want := escapeBefore(impactStyles["major"].Render("x")) + "╭"
+	if !strings.Contains(m.View().Content, want) {
+		t.Fatal("the incidents panel should use the major impact colour")
+	}
+}
+
+func TestTheIncidentsPaneIsOnTheRight(t *testing.T) {
+	m := newTestDetailModel()
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+
+	var panelTops string
+	for _, line := range strings.Split(plain(t, m.View().Content), "\n") {
+		if strings.Contains(line, "Watched components") {
+			panelTops = line
+		}
+	}
+	if strings.Index(panelTops, "Watched components") > strings.Index(panelTops, "Active incidents") {
+		t.Fatalf("want the components on the left and the incidents on the right: %q", panelTops)
 	}
 }
