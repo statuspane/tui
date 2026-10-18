@@ -410,3 +410,15 @@ func TestAFailedRenameShowsTheErrorAndKeepsTheDialogOpen(t *testing.T) {
 		t.Fatalf("a failed rename changed the open screen: %+v", m.detail)
 	}
 }
+
+func TestEveryScreenUsesTheAlternateScreen(t *testing.T) {
+	list := loadedRoot(api.App{Name: "First", Slug: "first"})
+	detail, _ := sendRoot(list, openAppMsg{slug: "first", name: "First"})
+	dialog, _ := sendRoot(list, openCreateAppDialogMsg{})
+
+	for name, m := range map[string]RootModel{"list": list, "detail": detail, "dialog": dialog} {
+		if !m.View().AltScreen {
+			t.Errorf("%s does not use the alternate screen", name)
+		}
+	}
+}
