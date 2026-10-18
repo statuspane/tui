@@ -494,12 +494,15 @@ func TestOnlyTheSelectedAppsOwnLineIsTinted(t *testing.T) {
 	}
 }
 
-func TestAppsAreSeparatedByABlankLine(t *testing.T) {
+func TestListStartsAfterABlankLineUnderTheRule(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "First"}, api.App{Name: "Second"})
 
 	lines := strings.Split(plain(t, m.View().Content), "\n")
-	first := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, "First") })
-	if !strings.Contains(lines[first+2], "Second") || strings.Trim(strings.Join(strings.Fields(lines[first+1]), ""), "│") != "" {
-		t.Fatalf("want First, a blank line, then Second:\n%s", strings.Join(lines[first:first+3], "\n"))
+	rule := slices.IndexFunc(lines, func(line string) bool {
+		return strings.Contains(line, "────────") && strings.Contains(line, "│  ─")
+	})
+	blank := strings.Trim(strings.Join(strings.Fields(lines[rule+1]), ""), "│")
+	if blank != "" || !strings.Contains(lines[rule+2], "First") || !strings.Contains(lines[rule+3], "Second") {
+		t.Fatalf("want a blank line, then the apps one under the other:\n%s", strings.Join(lines[rule:rule+4], "\n"))
 	}
 }
