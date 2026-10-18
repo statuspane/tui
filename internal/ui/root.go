@@ -35,7 +35,7 @@ func NewRootModel(backend Backend) RootModel {
 }
 
 func (m RootModel) Init() tea.Cmd {
-	return m.apps.Init()
+	return tea.Batch(m.apps.Init(), tea.RequestBackgroundColor)
 }
 
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

@@ -417,3 +417,57 @@ func TestAppsChangedDuringALoadReloadsRightAfterIt(t *testing.T) {
 		t.Fatal("want a reload as soon as the running fetch lands")
 	}
 }
+
+func TestColumnHeaderHasARuleUnderIt(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
+
+	assertViewContains(t, m.View().Content, "│ "+strings.Repeat("─", 96)+" │")
+}
+
+func TestStatusAndWatchingColumnsSitAtTheRightOfTheRow(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "Web App", Status: stringPtr("operational"), WatchedComponentsCount: 3})
+
+	var columns []int
+	for _, line := range strings.Split(plain(t, m.View().Content), "\n") {
+		for _, marker := range []string{"WATCHING", "3 components"} {
+			if index := strings.Index(line, marker); index >= 0 {
+				columns = append(columns, lipgloss.Width(line[:index]))
+			}
+		}
+	}
+	if len(columns) != 2 || columns[0] != columns[1] || columns[0] < 80 {
+		t.Fatalf("watching columns = %v, want both at the right edge", columns)
+	}
+}
+
+func selectedRowOf(t *testing.T, m AppsModel) string {
+	t.Helper()
+	for _, line := range strings.Split(m.View().Content, "\n") {
+		if strings.Contains(plain(t, line), "▸") {
+			return line
+		}
+	}
+	t.Fatal("no selected row")
+	return ""
+}
+
+func TestSelectedRowIsTintedAndKeepsItsStatusColour(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "Web App", Status: stringPtr("operational")})
+
+	row := selectedRowOf(t, m)
+	if !strings.Contains(row, "48;5;236") {
+		t.Errorf("selected row has no dark tint: %q", row)
+	}
+	if !strings.Contains(row, "32;48;5;236") {
+		t.Errorf("selected row lost the status colour: %q", row)
+	}
+}
+
+func TestSelectedRowTintFollowsALightBackground(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
+	m, _ = send(m, tea.BackgroundColorMsg{Color: lipgloss.Color("#ffffff")})
+
+	if row := selectedRowOf(t, m); !strings.Contains(row, "48;5;254") {
+		t.Errorf("selected row has no light tint: %q", row)
+	}
+}

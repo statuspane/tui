@@ -23,7 +23,13 @@ const (
 	noSelectionMarker = "  "
 	columnGap         = "  "
 
-	brandText      = "◉ STATUSPANE"
+	brandText = "◉ STATUSPANE"
+	// The status and watching columns have a fixed width; the name takes what is left of the row.
+	statusColumnWidth   = 24
+	watchingColumnWidth = 16
+	// listHeaderLines are the column header and the rule under it.
+	listHeaderLines = 2
+
 	nameColumn     = "NAME"
 	statusColumn   = "STATUS"
 	watchingColumn = "WATCHING"
@@ -63,10 +69,12 @@ type AppsModel struct {
 	reloadAfterLoad bool
 	spinner         spinner.Model
 	width, height   int
+	// hasDarkBackground picks the selected row's tint; dark until the terminal says otherwise.
+	hasDarkBackground bool
 }
 
 func NewAppsModel(appLister AppLister) AppsModel {
-	return AppsModel{appLister: appLister, isLoading: true, spinner: spinner.New()}
+	return AppsModel{appLister: appLister, isLoading: true, spinner: spinner.New(), hasDarkBackground: true}
 }
 
 func (m AppsModel) Init() tea.Cmd {
@@ -77,6 +85,10 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		return m, nil
+
+	case tea.BackgroundColorMsg:
+		m.hasDarkBackground = msg.IsDark()
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -220,7 +232,7 @@ func (m AppsModel) panelBody(contentWidth, rows int) string {
 	if status != "" {
 		listRows--
 	}
-	lines := m.listLines(contentWidth, listRows-1)
+	lines := m.listLines(contentWidth, listRows)
 	if status != "" {
 		lines = append(lines, status)
 	}
@@ -238,33 +250,38 @@ func (m AppsModel) refreshStatus() string {
 	return ""
 }
 
-// listLines is the column header and as many rows as fit, scrolled to keep the selected one in view.
-func (m AppsModel) listLines(contentWidth, rows int) []string {
-	nameWidth, statusWidth := len(nameColumn), len(statusColumn)
-	for _, app := range m.apps {
-		nameWidth = max(nameWidth, lipgloss.Width(app.Name))
-		statusWidth = max(statusWidth, lipgloss.Width(bullet+statusLabel(app.Status)))
-	}
+// listLines is the column header, a rule under it and as many rows as fit in lineCount lines,
+// scrolled to keep the selected one in view.
+func (m AppsModel) listLines(innerWidth, lineCount int) []string {
+	nameWidth := max(innerWidth-lipgloss.Width(selectionMarker)-2*lipgloss.Width(columnGap)-statusColumnWidth-watchingColumnWidth, len(nameColumn))
+	columnHeader := noSelectionMarker + padRight(nameColumn, nameWidth) + columnGap + padRight(statusColumn, statusColumnWidth) + columnGap + watchingColumn
 
-	lines := []string{mutedStyle.Render(noSelectionMarker + padRight(nameColumn, nameWidth) + columnGap + padRight(statusColumn, statusWidth) + columnGap + watchingColumn)}
-	start, end := visibleRange(len(m.apps), m.selectedIndex, max(rows, 1))
+	lines := []string{mutedStyle.Render(columnHeader), panelBorderStyle.Render(strings.Repeat("─", innerWidth))}
+	start, end := visibleRange(len(m.apps), m.selectedIndex, max(lineCount-listHeaderLines, 0))
 	for index := start; index < end; index++ {
-		lines = append(lines, m.appRow(m.apps[index], index == m.selectedIndex, nameWidth, statusWidth, contentWidth))
+		lines = append(lines, m.appRow(m.apps[index], index == m.selectedIndex, nameWidth, innerWidth))
 	}
 	return lines
 }
 
-// appRow pads each column as plain text before styling it. The selected row is one bar built
-// from plain text: styles nested inside a bar would end it early.
-func (m AppsModel) appRow(app api.App, isSelected bool, nameWidth, statusWidth, contentWidth int) string {
-	name := padRight(app.Name, nameWidth)
-	status := padRight(bullet+statusLabel(app.Status), statusWidth)
-	components := fmt.Sprintf("%d components", app.WatchedComponentsCount)
+// appRow pads each column as plain text before styling it. The selected row is tinted and
+// bold, and keeps its status colour: the tint is set on every piece, because a style nested
+// inside another one ends the outer one early.
+func (m AppsModel) appRow(app api.App, isSelected bool, nameWidth, innerWidth int) string {
+	appearance := appearanceOf(app.Status)
+	name := padRight(clipTo(app.Name, nameWidth), nameWidth)
+	status := padRight(bullet+appearance.label, statusColumnWidth)
+	watchedComponents := fmt.Sprintf("%d components", app.WatchedComponentsCount)
 
-	if isSelected {
-		return cursorRowStyle.Render(padRight(selectionMarker+name+columnGap+status+columnGap+components, contentWidth))
+	if !isSelected {
+		return noSelectionMarker + name + columnGap + appearance.style.Render(status) + columnGap + mutedStyle.Render(watchedComponents)
 	}
-	return noSelectionMarker + name + columnGap + appearanceOf(app.Status).style.Render(status) + columnGap + mutedStyle.Render(components)
+	tint := lipgloss.NewStyle().Background(rowTint(m.hasDarkBackground))
+	row := accentStyle.Background(rowTint(m.hasDarkBackground)).Render(selectionMarker) +
+		tint.Bold(true).Render(name) + tint.Render(columnGap) +
+		appearance.style.Background(rowTint(m.hasDarkBackground)).Render(status) + tint.Render(columnGap) +
+		mutedStyle.Background(rowTint(m.hasDarkBackground)).Render(padRight(watchedComponents, watchingColumnWidth))
+	return row + tint.Render(strings.Repeat(" ", max(innerWidth-lipgloss.Width(row), 0)))
 }
 
 func padRight(text string, width int) string {
