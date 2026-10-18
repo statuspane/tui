@@ -27,8 +27,12 @@ const (
 	// The status and watching columns have a fixed width; the name takes what is left of the row.
 	statusColumnWidth   = 24
 	watchingColumnWidth = 16
-	// listHeaderLines are the blank line, the column header, the rule under it and a blank line.
-	listHeaderLines = 4
+	// listHeaderLines are the blank line, the column header and the rule under it.
+	listHeaderLines = 3
+	// rowLineCount is an app's row and the spacer line above it.
+	rowLineCount   = 2
+	lowerHalfBlock = "▄"
+	upperHalfBlock = "▀"
 	// rowPaddingX is the space between the edge of the list and a row's content.
 	rowPaddingX = 2
 
@@ -253,19 +257,33 @@ func (m AppsModel) refreshStatus() string {
 	return ""
 }
 
-// listLines is a blank line, the column header, a rule under it and a blank line, then as many
-// app rows as fit in lineCount lines, scrolled to keep the selected one in view.
+// listLines is a blank line, the column header and a rule under it, then as many app rows as fit
+// in lineCount lines, scrolled to keep the selected one in view. A spacer line above each row
+// separates them.
 func (m AppsModel) listLines(innerWidth, lineCount int) []string {
 	nameWidth := max(innerWidth-2*rowPaddingX-lipgloss.Width(selectionMarker)-2*lipgloss.Width(columnGap)-statusColumnWidth-watchingColumnWidth, len(nameColumn))
 	rowPadding := strings.Repeat(" ", rowPaddingX)
 	columnHeader := rowPadding + noSelectionMarker + padRight(nameColumn, nameWidth) + columnGap + padRight(statusColumn, statusColumnWidth) + columnGap + watchingColumn
 
-	lines := []string{"", mutedStyle.Render(columnHeader), panelBorderStyle.Render(strings.Repeat("─", innerWidth)), ""}
-	start, end := visibleRange(len(m.apps), m.selectedIndex, max(lineCount-listHeaderLines, 0))
+	lines := []string{"", mutedStyle.Render(columnHeader), panelBorderStyle.Render(strings.Repeat("─", innerWidth))}
+	start, end := visibleRange(len(m.apps), m.selectedIndex, max((lineCount-listHeaderLines-1)/rowLineCount, 0))
 	for index := start; index < end; index++ {
-		lines = append(lines, m.appRow(m.apps[index], index == m.selectedIndex, nameWidth, innerWidth))
+		lines = append(lines, m.spacerLine(index, innerWidth), m.appRow(m.apps[index], index == m.selectedIndex, nameWidth, innerWidth))
 	}
-	return lines
+	return append(lines, m.spacerLine(end, innerWidth))
+}
+
+// spacerLine is the blank line above the app at index. Next to the selected row it holds half a
+// line of its tint, so the tint reaches a little above and below the row's own line.
+func (m AppsModel) spacerLine(index, innerWidth int) string {
+	tint := lipgloss.NewStyle().Foreground(rowTint(m.hasDarkBackground))
+	switch m.selectedIndex {
+	case index:
+		return tint.Render(strings.Repeat(lowerHalfBlock, innerWidth))
+	case index - 1:
+		return tint.Render(strings.Repeat(upperHalfBlock, innerWidth))
+	}
+	return ""
 }
 
 // appRow pads each column as plain text before styling it. The selected row is tinted and

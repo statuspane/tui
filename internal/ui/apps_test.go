@@ -494,15 +494,29 @@ func TestOnlyTheSelectedAppsOwnLineIsTinted(t *testing.T) {
 	}
 }
 
-func TestListStartsAfterABlankLineUnderTheRule(t *testing.T) {
-	m := sizedAppsModel(100, 30, api.App{Name: "First"}, api.App{Name: "Second"})
+func TestAppsAreSeparatedByABlankLine(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "First"}, api.App{Name: "Second"}, api.App{Name: "Third"})
+	m = pressRune(m, 'j')
+	m = pressRune(m, 'j')
 
 	lines := strings.Split(plain(t, m.View().Content), "\n")
-	rule := slices.IndexFunc(lines, func(line string) bool {
-		return strings.Contains(line, "────────") && strings.Contains(line, "│  ─")
-	})
-	blank := strings.Trim(strings.Join(strings.Fields(lines[rule+1]), ""), "│")
-	if blank != "" || !strings.Contains(lines[rule+2], "First") || !strings.Contains(lines[rule+3], "Second") {
-		t.Fatalf("want a blank line, then the apps one under the other:\n%s", strings.Join(lines[rule:rule+4], "\n"))
+	first := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, "First") })
+	blank := strings.Trim(strings.Join(strings.Fields(lines[first+1]), ""), "│")
+	if blank != "" || !strings.Contains(lines[first+2], "Second") {
+		t.Fatalf("want First, a blank line, then Second:\n%s", strings.Join(lines[first:first+3], "\n"))
+	}
+}
+
+func TestSelectedRowIsPaddedByHalfALineAboveAndBelow(t *testing.T) {
+	m := sizedAppsModel(100, 30, api.App{Name: "First"}, api.App{Name: "Second"}, api.App{Name: "Third"})
+	m = pressRune(m, 'j')
+
+	lines := strings.Split(plain(t, m.View().Content), "\n")
+	selected := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, "▸") })
+	if !strings.Contains(lines[selected-1], "▄▄▄▄") || !strings.Contains(lines[selected+1], "▀▀▀▀") {
+		t.Fatalf("want a half block above and below the selected row:\n%s", strings.Join(lines[selected-1:selected+2], "\n"))
+	}
+	if strings.ContainsAny(lines[selected-3], "▄▀") || strings.ContainsAny(lines[selected+3], "▄▀") {
+		t.Fatal("only the selected row is padded")
 	}
 }
