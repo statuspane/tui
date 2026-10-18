@@ -173,6 +173,21 @@ func stackedScreen(header, body, footer string) string {
 	return lipgloss.NewStyle().Padding(screenMarginY, screenMarginX).Render(stacked)
 }
 
+// centeredOver draws box in the middle of a window of windowWidth x windowHeight cells, over base:
+// the cells of the box replace the base's, and the rest of the base stays visible around it.
+func centeredOver(base, box string, windowWidth, windowHeight int) string {
+	boxWidth, boxHeight := lipgloss.Size(box)
+	boxLayer := lipgloss.NewLayer(box).X(max((windowWidth-boxWidth)/2, 0)).Y(max((windowHeight-boxHeight)/2, 0)).Z(1)
+	return lipgloss.NewCompositor(lipgloss.NewLayer(base, boxLayer)).Render()
+}
+
+// inputBox is one line in a box width cells wide: left at the start and right at the end, as in a
+// text field with its character count. The look says whether the field has the focus.
+func inputBox(left, right string, look panelLook, width int) string {
+	lineWidth, _ := panelContentSize(width, oneLineBoxHeight)
+	return panelWithLook(look, "", headerBar(left, right, lineWidth), width, oneLineBoxHeight)
+}
+
 // clipTo cuts a possibly styled line to width cells, without a trailing ellipsis.
 func clipTo(line string, width int) string {
 	return lipgloss.NewStyle().MaxWidth(width).Render(line)

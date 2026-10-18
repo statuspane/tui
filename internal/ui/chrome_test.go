@@ -132,3 +132,43 @@ func TestAlertBarIsAFooterShapedBoxWithTheMessageInIt(t *testing.T) {
 		t.Errorf("the edge should be red:\n%q", view)
 	}
 }
+
+func TestCenteredOverPutsTheBoxInTheMiddleAndKeepsTheBaseAround(t *testing.T) {
+	baseLine := "● " + strings.Repeat("abcdefghij", 4) + " ●"
+	base := strings.TrimSuffix(strings.Repeat(baseLine+"\n", 9), "\n")
+	box := panel("Box", "hello", 20, 5)
+
+	lines := strings.Split(plain(t, centeredOver(base, box, lipgloss.Width(baseLine), 9)), "\n")
+
+	if !strings.Contains(lines[2], "╭─ Box") || !strings.Contains(lines[6], "╰") {
+		t.Fatalf("the box should be centred vertically, on lines 2 to 6:\n%s", strings.Join(lines, "\n"))
+	}
+	corner := strings.Index(lines[2], "╭")
+	if want := (lipgloss.Width(baseLine) - 20) / 2; lipgloss.Width(lines[2][:corner]) != want {
+		t.Fatalf("the box should start at column %d:\n%s", want, lines[2])
+	}
+	if lines[0] != baseLine || !strings.HasPrefix(lines[3], "● ") || !strings.HasSuffix(lines[3], " ●") {
+		t.Fatalf("the base should stay visible around the box:\n%s", strings.Join(lines, "\n"))
+	}
+}
+
+func TestCenteredOverCoversTheBaseUnderTheBox(t *testing.T) {
+	base := strings.TrimSuffix(strings.Repeat(strings.Repeat("x", 40)+"\n", 9), "\n")
+
+	view := plain(t, centeredOver(base, panel("Title", "hello", 20, 5), 40, 9))
+
+	if strings.Count(view, "x") != 40*9-20*5 {
+		t.Fatalf("the box should replace exactly its own cells:\n%s", view)
+	}
+}
+
+func TestInputBoxHasItsTextAtBothEnds(t *testing.T) {
+	view := plain(t, inputBox("Storefront", "10 / 100", defaultPanelLook, 40))
+
+	assertEveryLineHasWidth(t, view, 40)
+	assertHeightIs(t, view, oneLineBoxHeight)
+	middle := strings.Split(view, "\n")[1]
+	if !strings.Contains(middle, "│  Storefront") || !strings.Contains(middle, "10 / 100  │") {
+		t.Fatalf("middle = %q", middle)
+	}
+}
