@@ -99,14 +99,9 @@ func (d deleteAppDialog) view() string {
 		mutedStyle.Render("Type the app's name to confirm:"),
 		inputBox(d.input.View(), "", defaultPanelLook, dialogContentWidth),
 	}
-	switch {
-	case d.isSubmitting:
-		lines = append(lines, "", "Deleting…")
-	case d.err != nil:
-		lines = append(lines, "", errorStyle.Render(wrappedText(errorMessage(d.err))))
-	}
-	lines = append(lines, "", dialogHints(d.deleteHint(), renderHint(keyHint{"esc", "cancel"})))
-	return dialogBox(dangerDialogLook, "Delete "+d.name+"?", lines...)
+	lines = append(lines, statusLines(d.isSubmitting, "Deleting…", d.err, errorMessage)...)
+	lines = append(lines, hintLines(d.deleteHint(), renderHint(keyHint{"esc", "cancel"}))...)
+	return dialogBox(dangerPanelLook, "Delete "+d.name+"?", lines)
 }
 
 // deleteHint reads as a live key once the typed name matches, and as a disabled one until then.

@@ -189,21 +189,16 @@ func (m RootModel) updateActiveScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View takes the whole terminal: the screens are laid out to the window size, and a frame as
-// tall as the window would otherwise scroll the shell's history.
+// tall as the window would otherwise scroll the shell's history. A dialog, if one is open, is
+// drawn in the middle of the screen behind it.
 func (m RootModel) View() tea.View {
-	view := m.currentView()
+	view := m.screenView()
+	if m.dialog != nil {
+		width, height := withFallbackSize(m.width, m.height)
+		view = tea.NewView(centeredOver(view.Content, m.dialog.view(), width, height))
+	}
 	view.AltScreen = true
 	return view
-}
-
-// currentView is the screen that is showing, with the dialog, if one is open, in the middle of it.
-func (m RootModel) currentView() tea.View {
-	screen := m.screenView()
-	if m.dialog == nil {
-		return screen
-	}
-	width, height := withFallbackSize(m.width, m.height)
-	return tea.NewView(centeredOver(screen.Content, m.dialog.view(), width, height))
 }
 
 func (m RootModel) screenView() tea.View {

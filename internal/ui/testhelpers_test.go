@@ -115,3 +115,45 @@ func assertHeightIs(t *testing.T, view string, height int) {
 func escapeBefore(styled string) string {
 	return styled[:strings.Index(styled, "x")]
 }
+
+// plainLines is a view without its colour codes, one string per line.
+func plainLines(t *testing.T, view string) []string {
+	t.Helper()
+	return strings.Split(plain(t, view), "\n")
+}
+
+// lineContaining is the first line of the view, without colour codes, that has text in it.
+func lineContaining(t *testing.T, view, text string) string {
+	t.Helper()
+	for _, line := range plainLines(t, view) {
+		if strings.Contains(line, text) {
+			return line
+		}
+	}
+	t.Fatalf("no line contains %q:\n%s", text, plain(t, view))
+	return ""
+}
+
+// columnOf is the cell, not the byte, at which text starts in a line.
+func columnOf(t *testing.T, line, text string) int {
+	t.Helper()
+	index := strings.Index(line, text)
+	if index < 0 {
+		t.Fatalf("%q is not in %q", text, line)
+	}
+	return lipgloss.Width(line[:index])
+}
+
+// assertEdgeIs fails unless the view has a panel corner drawn in the border of look.
+func assertEdgeIs(t *testing.T, view string, look panelLook) {
+	t.Helper()
+	if !strings.Contains(view, escapeBefore(look.border.Render("x"))+"╭") {
+		t.Errorf("no panel corner in the colour of that look:\n%q", view)
+	}
+}
+
+// The window the root tests open in.
+const (
+	testRootWidth  = 100
+	testRootHeight = 30
+)

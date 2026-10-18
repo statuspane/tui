@@ -89,14 +89,9 @@ func (d renameAppDialog) handleKey(keyPress tea.KeyPressMsg) (dialog, tea.Cmd) {
 
 func (d renameAppDialog) view() string {
 	lines := []string{mutedStyle.Render("Name"), nameBox(d.input)}
-	switch {
-	case d.isSubmitting:
-		lines = append(lines, "", "Renaming…")
-	case d.err != nil:
-		lines = append(lines, "", errorStyle.Render(wrappedText(fieldErrorMessage(d.err, nameField))))
-	}
-	lines = append(lines, "", dialogHints(renderHint(keyHint{"⏎", "rename"}), renderHint(keyHint{"esc", "cancel"})))
-	return dialogBox(accentDialogLook, "Rename app", lines...)
+	lines = append(lines, statusLines(d.isSubmitting, "Renaming…", d.err, func(err error) string { return fieldErrorMessage(err, nameField) })...)
+	lines = append(lines, hintLines(renderHint(keyHint{"⏎", "rename"}), renderHint(keyHint{"esc", "cancel"}))...)
+	return dialogBox(accentPanelLook, "Rename app", lines)
 }
 
 func renameApp(appRenamer AppRenamer, appSlug, newName string) tea.Cmd {

@@ -10,9 +10,13 @@ import (
 )
 
 const (
-	inputWidth       = 40
 	maxAppNameLength = 100
 	nameField        = "name"
+
+	// nameCountReserve is the room the name box keeps for the count ("100 / 100"), a gap and the
+	// cursor; the text field takes the rest of its line.
+	nameCountReserve = 12
+	inputWidth       = dialogContentWidth - panelChromeWidth - nameCountReserve
 )
 
 // dialog is a modal the root model draws over the current screen. It handles every key press
@@ -30,33 +34,39 @@ const (
 	dialogContentWidth = dialogWidth - panelChromeWidth
 )
 
-var (
-	accentDialogLook = panelLook{border: lipgloss.NewStyle().Foreground(colorBlue), title: accentStyle}
-	// dangerDialogLook is for the dialog that deletes something.
-	dangerDialogLook = panelLook{border: errorStyle, title: errorStyle.Bold(true)}
-)
-
 func closeDialog() tea.Msg { return closeDialogMsg{} }
 
 // dialogBox is a dialog: a panel with title in its top edge, lines inside it, and a fixed width.
-func dialogBox(look panelLook, title string, lines ...string) string {
-	body := strings.Join(lines, "\n")
-	return panelWithLook(look, title, body, dialogWidth, strings.Count(body, "\n")+1+panelChromeHeight)
+func dialogBox(look panelLook, title string, lines []string) string {
+	bodyText := strings.Join(lines, "\n")
+	return panelWithLook(look, title, bodyText, dialogWidth, lipgloss.Height(bodyText)+panelChromeHeight)
 }
 
 // nameBox is the name field with how many characters it has, out of how many it can take.
-func nameBox(input textinput.Model) string {
-	return inputBox(input.View(), mutedStyle.Render(nameLengthText(input.Value())), defaultPanelLook, dialogContentWidth)
+func nameBox(nameInput textinput.Model) string {
+	return inputBox(nameInput.View(), mutedStyle.Render(nameLengthText(nameInput.Value())), defaultPanelLook, dialogContentWidth)
+}
+
+// statusLines is what a dialog says while its request is running or after it failed, under a
+// blank line; nothing otherwise.
+func statusLines(isSubmitting bool, pending string, err error, errorText func(error) string) []string {
+	switch {
+	case isSubmitting:
+		return []string{"", pending}
+	case err != nil:
+		return []string{"", errorStyle.Render(wrappedText(errorText(err)))}
+	}
+	return nil
+}
+
+// hintLines is the keys of a dialog on one line, under a blank line.
+func hintLines(hints ...string) []string {
+	return []string{"", strings.Join(hints, hintGap)}
 }
 
 // wrappedText breaks text into lines that fit inside a dialog.
 func wrappedText(text string) string {
 	return lipgloss.NewStyle().Width(dialogContentWidth).Render(text)
-}
-
-// dialogHints is the keys of a dialog on one line.
-func dialogHints(hints ...string) string {
-	return strings.Join(hints, hintGap)
 }
 
 // newNameInput is the focused text box for an app's name, starting with value.

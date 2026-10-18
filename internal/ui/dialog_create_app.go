@@ -76,14 +76,9 @@ func (d createAppDialog) handleKey(keyPress tea.KeyPressMsg) (dialog, tea.Cmd) {
 
 func (d createAppDialog) view() string {
 	lines := []string{mutedStyle.Render("Name"), nameBox(d.input), mutedStyle.Render("After creating it you can choose the components to watch.")}
-	switch {
-	case d.isSubmitting:
-		lines = append(lines, "", "Creating…")
-	case d.err != nil:
-		lines = append(lines, "", errorStyle.Render(wrappedText(fieldErrorMessage(d.err, nameField))))
-	}
-	lines = append(lines, "", dialogHints(renderHint(keyHint{"⏎", "create"}), renderHint(keyHint{"esc", "cancel"})))
-	return dialogBox(accentDialogLook, "New app", lines...)
+	lines = append(lines, statusLines(d.isSubmitting, "Creating…", d.err, func(err error) string { return fieldErrorMessage(err, nameField) })...)
+	lines = append(lines, hintLines(renderHint(keyHint{"⏎", "create"}), renderHint(keyHint{"esc", "cancel"}))...)
+	return dialogBox(accentPanelLook, "New app", lines)
 }
 
 func createApp(appCreator AppCreator, name string) tea.Cmd {

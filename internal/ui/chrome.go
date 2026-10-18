@@ -52,13 +52,18 @@ func renderHint(hint keyHint) string {
 // panelLook is how a panel's edges and title are coloured.
 type panelLook struct{ border, title lipgloss.Style }
 
-var defaultPanelLook = panelLook{border: panelBorderStyle, title: accentStyle}
+var (
+	defaultPanelLook = panelLook{border: panelBorderStyle, title: accentStyle}
+	accentPanelLook  = panelLook{border: lipgloss.NewStyle().Foreground(colorBlue), title: accentStyle}
+	// dangerPanelLook is for what deletes something.
+	dangerPanelLook = panelLook{border: errorStyle, title: errorStyle.Bold(true)}
+)
 
 // untintedPanelLook is the look of a pane that is not tinted by anything: the accent colour while
 // it has the focus, quiet otherwise.
 func untintedPanelLook(isFocused bool) panelLook {
 	if isFocused {
-		return panelLook{border: lipgloss.NewStyle().Foreground(colorBlue), title: accentStyle}
+		return accentPanelLook
 	}
 	return defaultPanelLook
 }
@@ -174,12 +179,13 @@ func stackedScreen(header, body, footer string) string {
 	return lipgloss.NewStyle().Padding(screenMarginY, screenMarginX).Render(stacked)
 }
 
-// centeredOver draws box in the middle of a window of windowWidth x windowHeight cells, over base:
-// the cells of the box replace the base's, and the rest of the base stays visible around it.
-func centeredOver(base, box string, windowWidth, windowHeight int) string {
-	boxWidth, boxHeight := lipgloss.Size(box)
-	boxLayer := lipgloss.NewLayer(box).X(max((windowWidth-boxWidth)/2, 0)).Y(max((windowHeight-boxHeight)/2, 0)).Z(1)
-	return lipgloss.NewCompositor(lipgloss.NewLayer(base, boxLayer)).Render()
+// centeredOver draws overlay in the middle of a window of windowWidth x windowHeight cells, over
+// base: the cells of the overlay replace the base's, and the rest of the base stays visible around
+// it. An overlay larger than the window sits at its top left corner.
+func centeredOver(base, overlay string, windowWidth, windowHeight int) string {
+	overlayWidth, overlayHeight := lipgloss.Size(overlay)
+	overlayLayer := lipgloss.NewLayer(overlay).X(max((windowWidth-overlayWidth)/2, 0)).Y(max((windowHeight-overlayHeight)/2, 0)).Z(1)
+	return lipgloss.NewCompositor(lipgloss.NewLayer(base, overlayLayer)).Render()
 }
 
 // inputBox is one line in a box width cells wide: left at the start and right at the end, as in a
