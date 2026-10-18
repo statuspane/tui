@@ -14,9 +14,6 @@ import (
 const (
 	// Rows around the scrolling content: title, status line, blank, key help.
 	detailChromeHeight = 4
-
-	fallbackWidth  = 80
-	fallbackHeight = 24
 )
 
 // AppGetter is the one thing the detail screen needs from the API client; tests pass a fake.

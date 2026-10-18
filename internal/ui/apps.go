@@ -2,7 +2,6 @@
 package ui
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -219,9 +218,8 @@ func (m AppsModel) View() tea.View {
 	return tea.NewView(stackedScreen(header, appsPanel, footerBar(appsHints, m.footerTrailing(), width)))
 }
 
-// windowSize falls back to a classic 80x24 terminal until the window size is known.
 func (m AppsModel) windowSize() (width, height int) {
-	return cmp.Or(m.width, fallbackWidth), cmp.Or(m.height, fallbackHeight)
+	return withFallbackSize(m.width, m.height)
 }
 
 func (m AppsModel) footerTrailing() string {
