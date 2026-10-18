@@ -34,7 +34,7 @@ title colours are a `panelLook`; `panel` uses the default one, `panelWithLook` t
 
 The app screen is two panels side by side, each over its own viewport (`incidentsViewport`,
 `componentsViewport`); `focus` says which one `↑/↓/pgup/pgdn` scroll and `tab` toggles it. The
-components are laid out to their pane's width, so `resized` fills both viewports again, and a
+components are laid out to their pane's width, so `sizedToWindow` fills both viewports again, and a
 viewport keeps its scroll offset when its content changes, which is what keeps a refresh from
 sending a pane back to the top. The incidents panel is tinted by the worst active incident
 (`incidentsPanelLook`) and shows focus as a bold title only, so the tint is never lost.

@@ -75,12 +75,3 @@ func nameStyleFor(state watchState) lipgloss.Style {
 	}
 	return lipgloss.NewStyle()
 }
-
-// focusLook is the look of a pane that is not tinted by anything: the accent colour while it has
-// the focus, quiet otherwise.
-func focusLook(isFocused bool) panelLook {
-	if isFocused {
-		return panelLook{border: lipgloss.NewStyle().Foreground(colorBlue), title: accentStyle}
-	}
-	return defaultPanelLook
-}

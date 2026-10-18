@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	// The incidents pane gets this many parts of incidentsAndComponentsParts, the components the rest.
-	incidentsPaneParts          = 11
-	incidentsAndComponentsParts = 21
-	paneGapWidth                = 2
-	moreHintLines               = 1
+	// The panes share the width in these proportions.
+	incidentsPaneParts  = 11
+	componentsPaneParts = 10
+	paneGapWidth        = 2
+	moreHintLines       = 1
 )
 
 // detailFocus is the pane of the app screen that has the focus.
@@ -61,28 +61,28 @@ type AppDetailModel struct {
 	spinner         spinner.Model
 	now             func() time.Time
 
-	incidentsViewport  viewport.Model
-	componentsViewport viewport.Model
-	focus              detailFocus
-	width, height      int
+	incidentsViewport         viewport.Model
+	componentsViewport        viewport.Model
+	focus                     detailFocus
+	windowWidth, windowHeight int
 }
 
-// NewAppDetailModel shows name until the app has loaded. A zero width or height
-// (no window size received yet) falls back to a classic 80x24 terminal.
+// NewAppDetailModel shows name until the app has loaded. A zero width or height (no window
+// size received yet) is drawn as a classic 80x24 terminal.
 func NewAppDetailModel(appGetter AppGetter, slug, name string, width, height int) AppDetailModel {
 	m := AppDetailModel{
-		appGetter: appGetter,
-		slug:      slug,
-		name:      name,
-		isLoading: true,
-		spinner:   spinner.New(),
-		now:       time.Now,
-		focus:     focusComponents,
-		width:     width,
-		height:    height,
+		appGetter:    appGetter,
+		slug:         slug,
+		name:         name,
+		isLoading:    true,
+		spinner:      spinner.New(),
+		now:          time.Now,
+		focus:        focusComponents,
+		windowWidth:  width,
+		windowHeight: height,
 	}
 	m.incidentsViewport.SoftWrap = true
-	return m.resized()
+	return m.sizedToWindow()
 }
 
 func (m AppDetailModel) Init() tea.Cmd {
@@ -95,14 +95,14 @@ func (m AppDetailModel) Update(msg tea.Msg) (AppDetailModel, tea.Cmd) {
 		return m.handleKey(msg)
 
 	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
-		return m.resized(), nil
+		m.windowWidth, m.windowHeight = msg.Width, msg.Height
+		return m.sizedToWindow(), nil
 
 	case appDetailLoadedMsg:
 		// The API answers with the app's current slug, which may differ after a rename.
 		m.appDetail, m.slug, m.name = msg.appDetail, msg.appDetail.Slug, msg.appDetail.Name
 		m.err, m.hasLoaded, m.isLoading = nil, true, false
-		m = m.withContent()
+		m = m.withViewportContents()
 		return m.scheduleRefresh()
 
 	case appDetailFailedMsg:
@@ -132,13 +132,13 @@ func (m AppDetailModel) handleKey(keyPress tea.KeyPressMsg) (AppDetailModel, tea
 	case "tab":
 		m.focus = otherFocus(m.focus)
 	case "up", "k":
-		m.focusedViewport().ScrollUp(1)
+		return m.scrolled(func(paneViewport *viewport.Model) { paneViewport.ScrollUp(1) }), nil
 	case "down", "j":
-		m.focusedViewport().ScrollDown(1)
+		return m.scrolled(func(paneViewport *viewport.Model) { paneViewport.ScrollDown(1) }), nil
 	case "pgup":
-		m.focusedViewport().PageUp()
+		return m.scrolled(func(paneViewport *viewport.Model) { paneViewport.PageUp() }), nil
 	case "pgdown":
-		m.focusedViewport().PageDown()
+		return m.scrolled(func(paneViewport *viewport.Model) { paneViewport.PageDown() }), nil
 	case "w":
 		if !m.hasLoaded {
 			return m, nil
@@ -189,14 +189,24 @@ func (m AppDetailModel) scheduleRefresh() (AppDetailModel, tea.Cmd) {
 }
 
 func (m AppDetailModel) View() tea.View {
-	screenWidth, screenHeight := withFallbackSize(m.width, m.height)
-	width, panelHeight := layoutWidth(screenWidth), bodyHeight(screenHeight)
-	incidentsWidth, componentsWidth := paneWidths(width)
+	layout := m.paneLayout()
 
-	header := headerBar(m.headerLeft(), m.headerRight(), width)
+	header := headerBar(m.headerLeft(), m.headerRight(), layout.contentWidth)
 	panes := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.componentsPanel(componentsWidth, panelHeight), strings.Repeat(" ", paneGapWidth), m.incidentsPanel(incidentsWidth, panelHeight))
-	return tea.NewView(stackedScreen(header, panes, footerBar(detailHints, m.footerTrailing(), width)))
+		m.componentsPanel(layout.componentsWidth, layout.paneHeight), strings.Repeat(" ", paneGapWidth), m.incidentsPanel(layout.incidentsWidth, layout.paneHeight))
+	return tea.NewView(stackedScreen(header, panes, footerBar(detailHints, m.footerTrailing(), layout.contentWidth)))
+}
+
+// paneLayout is how the window is shared out: the width inside the margin, each pane's width and
+// the panes' height.
+type paneLayout struct{ contentWidth, incidentsWidth, componentsWidth, paneHeight int }
+
+func (m AppDetailModel) paneLayout() paneLayout {
+	windowWidth, windowHeight := withFallbackSize(m.windowWidth, m.windowHeight)
+	contentWidth := layoutWidth(windowWidth)
+	paneSpace := contentWidth - paneGapWidth
+	incidentsWidth := paneSpace * incidentsPaneParts / (incidentsPaneParts + componentsPaneParts)
+	return paneLayout{contentWidth, incidentsWidth, paneSpace - incidentsWidth, bodyHeight(windowHeight)}
 }
 
 func (m AppDetailModel) footerTrailing() string {
@@ -225,46 +235,37 @@ func (m AppDetailModel) headerRight() string {
 }
 
 func (m AppDetailModel) incidentsPanel(width, height int) string {
-	title := "Active incidents"
+	title, body := "Active incidents", m.statusLine()
 	if m.hasLoaded {
 		title = fmt.Sprintf("Active incidents (%d)", len(m.appDetail.ActiveIncidents))
+		body = scrollingBody(m.incidentsViewport)
 	}
 	look := incidentsPanelLook(m.appDetail.ActiveIncidents, m.focus == focusIncidents)
-	return panelWithLook(look, title, m.paneBody(m.incidentsViewport, m.statusLine()), width, height)
+	return panelWithLook(look, title, body, width, height)
 }
 
 func (m AppDetailModel) componentsPanel(width, height int) string {
-	title := "Watched components"
+	title, body := "Watched components", ""
 	if m.hasLoaded {
 		title = fmt.Sprintf("Watched components (%d)", len(m.appDetail.WatchedComponents))
+		body = scrollingBody(m.componentsViewport)
 	}
-	return panelWithLook(focusLook(m.focus == focusComponents), title, m.paneBody(m.componentsViewport, ""), width, height)
+	return panelWithLook(untintedPanelLook(m.focus == focusComponents), title, body, width, height)
 }
 
-// paneBody is a pane's scrolling content and, under it, how much more there is below. Until the
-// app has loaded the pane shows beforeLoad instead.
-func (m AppDetailModel) paneBody(content viewport.Model, beforeLoad string) string {
-	if !m.hasLoaded {
-		return beforeLoad
-	}
-	return content.View() + "\n" + moreHint(content)
+// scrollingBody is a pane's scrolling content and, under it, how much more there is below.
+func scrollingBody(paneViewport viewport.Model) string {
+	return paneViewport.View() + "\n" + moreHint(paneViewport)
 }
 
 // moreHint is "↓ N more" while there are lines below the visible ones, and blank otherwise, so
 // the pane doesn't change height as it scrolls.
-func moreHint(content viewport.Model) string {
-	linesBelow := content.TotalLineCount() - content.YOffset() - content.VisibleLineCount()
+func moreHint(paneViewport viewport.Model) string {
+	linesBelow := paneViewport.TotalLineCount() - paneViewport.YOffset() - paneViewport.VisibleLineCount()
 	if linesBelow <= 0 {
 		return ""
 	}
 	return mutedStyle.Render(fmt.Sprintf("↓ %d more", linesBelow))
-}
-
-// paneWidths splits the screen width between the panes, leaving the gap between them.
-func paneWidths(width int) (incidentsWidth, componentsWidth int) {
-	paneSpace := width - paneGapWidth
-	incidentsWidth = paneSpace * incidentsPaneParts / incidentsAndComponentsParts
-	return incidentsWidth, paneSpace - incidentsWidth
 }
 
 func otherFocus(focus detailFocus) detailFocus {
@@ -274,34 +275,36 @@ func otherFocus(focus detailFocus) detailFocus {
 	return focusIncidents
 }
 
-func (m *AppDetailModel) focusedViewport() *viewport.Model {
+// scrolled applies scroll to the viewport of the pane that has the focus.
+func (m AppDetailModel) scrolled(scroll func(*viewport.Model)) AppDetailModel {
 	if m.focus == focusIncidents {
-		return &m.incidentsViewport
+		scroll(&m.incidentsViewport)
+	} else {
+		scroll(&m.componentsViewport)
 	}
-	return &m.componentsViewport
+	return m
 }
 
-// resized sizes both viewports to fit their panes and fills them again, because the components
-// are laid out to their pane's width.
-func (m AppDetailModel) resized() AppDetailModel {
-	screenWidth, screenHeight := withFallbackSize(m.width, m.height)
-	incidentsWidth, componentsWidth := paneWidths(layoutWidth(screenWidth))
-	panelHeight := bodyHeight(screenHeight)
-
-	for _, pane := range []struct {
-		content *viewport.Model
-		width   int
-	}{{&m.incidentsViewport, incidentsWidth}, {&m.componentsViewport, componentsWidth}} {
-		contentWidth, contentHeight := panelContentSize(pane.width, panelHeight)
-		pane.content.SetWidth(contentWidth)
-		pane.content.SetHeight(max(contentHeight-moreHintLines, 1))
-	}
-	return m.withContent()
+// sizedToWindow sizes both viewports to fit their panes and fills them again, because the
+// components are laid out to their pane's width.
+func (m AppDetailModel) sizedToWindow() AppDetailModel {
+	layout := m.paneLayout()
+	m.incidentsViewport = sizedViewport(m.incidentsViewport, layout.incidentsWidth, layout.paneHeight)
+	m.componentsViewport = sizedViewport(m.componentsViewport, layout.componentsWidth, layout.paneHeight)
+	return m.withViewportContents()
 }
 
-// withContent fills the viewports from the app. A viewport keeps its scroll position when its
-// content changes, so a refresh doesn't send either pane back to the top.
-func (m AppDetailModel) withContent() AppDetailModel {
+// sizedViewport fits a viewport inside a pane, leaving the last line for the "more" hint.
+func sizedViewport(paneViewport viewport.Model, paneWidth, paneHeight int) viewport.Model {
+	contentWidth, contentHeight := panelContentSize(paneWidth, paneHeight)
+	paneViewport.SetWidth(contentWidth)
+	paneViewport.SetHeight(max(contentHeight-moreHintLines, 1))
+	return paneViewport
+}
+
+// withViewportContents fills the viewports from the app. A viewport keeps its scroll position
+// when its content changes, so a refresh doesn't send either pane back to the top.
+func (m AppDetailModel) withViewportContents() AppDetailModel {
 	m.incidentsViewport.SetContent(renderIncidents(m.appDetail.ActiveIncidents, m.now()))
 	m.componentsViewport.SetContent(renderComponents(m.appDetail.WatchedComponents, m.componentsViewport.Width()))
 	return m

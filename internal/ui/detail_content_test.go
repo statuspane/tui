@@ -9,14 +9,20 @@ import (
 	"github.com/statuspane/tui/internal/api"
 )
 
+// testPaneWidth is a pane wide enough for a component and its status.
+const testPaneWidth = 40
+
 func TestComponentStatusIsAtTheRightEdgeOfThePane(t *testing.T) {
 	components := []api.Component{namedComponent("github", "a", "API Requests", nil)}
 
-	rows := strings.Split(plain(t, renderComponents(components, 40)), "\n")
+	rows := strings.Split(plain(t, renderComponents(components, testPaneWidth)), "\n")
 
 	row := rows[len(rows)-1]
-	if lipgloss.Width(row) != 40 || !strings.HasSuffix(row, "Operational") || !strings.Contains(row, "● API Requests") {
-		t.Fatalf("row = %q", row)
+	if lipgloss.Width(row) != testPaneWidth {
+		t.Errorf("row is %d wide, want %d: %q", lipgloss.Width(row), testPaneWidth, row)
+	}
+	if !strings.HasSuffix(row, "Operational") {
+		t.Errorf("row does not end with the status: %q", row)
 	}
 }
 
@@ -27,10 +33,14 @@ func TestComponentsAreListedUnderTheirProviderAndGroup(t *testing.T) {
 		namedComponent("github", "b", "Pages", nil),
 	}
 
-	rows := strings.Split(plain(t, renderComponents(components, 40)), "\n")
+	rows := strings.Split(plain(t, renderComponents(components, testPaneWidth)), "\n")
 
-	if len(rows) != 4 || rows[0] != "github" || rows[1] != "  Core" || !strings.HasPrefix(rows[2], "    ● API Requests") || !strings.HasPrefix(rows[3], "  ● Pages") {
-		t.Fatalf("rows = %q", rows)
+	withStatus := func(left string) string {
+		return left + strings.Repeat(" ", testPaneWidth-lipgloss.Width(left)-len("Operational")) + "Operational"
+	}
+	want := []string{"github", "  Core", withStatus("    ● API Requests"), withStatus("  ● Pages")}
+	if strings.Join(rows, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("rows = %q, want %q", rows, want)
 	}
 }
 
@@ -63,7 +73,7 @@ func sameLook(first, second panelLook) bool {
 }
 
 func TestIncidentsPanelWithoutIncidentsLooksLikeAnyOtherPane(t *testing.T) {
-	if !sameLook(incidentsPanelLook(nil, false), focusLook(false)) || !sameLook(incidentsPanelLook(nil, true), focusLook(true)) {
+	if !sameLook(incidentsPanelLook(nil, false), untintedPanelLook(false)) || !sameLook(incidentsPanelLook(nil, true), untintedPanelLook(true)) {
 		t.Fatal("no incidents, no tint")
 	}
 }

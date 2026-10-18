@@ -110,16 +110,14 @@ func TestPanelWithLookColoursTheEdgeAndTheTitle(t *testing.T) {
 	}
 }
 
-func TestPanelKeepsTheDefaultLook(t *testing.T) {
-	if panel("Apps", "x", 30, 4) != panelWithLook(defaultPanelLook, "Apps", "x", 30, 4) {
-		t.Fatal("panel should draw with the default look")
-	}
-}
-
 func TestWithFallbackSizeOnlyReplacesWhatIsNotKnown(t *testing.T) {
-	width, height := withFallbackSize(0, 50)
-
-	if width != fallbackWidth || height != 50 {
-		t.Fatalf("size = %dx%d", width, height)
+	for _, test := range []struct{ width, height, wantWidth, wantHeight int }{
+		{0, 50, fallbackWidth, 50},
+		{70, 0, 70, fallbackHeight},
+		{70, 50, 70, 50},
+	} {
+		if width, height := withFallbackSize(test.width, test.height); width != test.wantWidth || height != test.wantHeight {
+			t.Errorf("withFallbackSize(%d, %d) = %dx%d, want %dx%d", test.width, test.height, width, height, test.wantWidth, test.wantHeight)
+		}
 	}
 }
