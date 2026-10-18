@@ -256,8 +256,7 @@ func (m AppsModel) refreshStatus() string {
 }
 
 // listLines is a blank line, the column header, a rule under it, and as many app rows as fit
-// in lineCount lines, scrolled to keep the selected one in view. Rows are separated by a spacer
-// line, which the selected row's tint covers above and below it.
+// in lineCount lines, scrolled to keep the selected one in view. Rows are separated by a blank line.
 func (m AppsModel) listLines(innerWidth, lineCount int) []string {
 	nameWidth := max(innerWidth-2*rowPaddingX-lipgloss.Width(selectionMarker)-2*lipgloss.Width(columnGap)-statusColumnWidth-watchingColumnWidth, len(nameColumn))
 	rowPadding := strings.Repeat(" ", rowPaddingX)
@@ -266,18 +265,9 @@ func (m AppsModel) listLines(innerWidth, lineCount int) []string {
 	lines := []string{"", mutedStyle.Render(columnHeader), panelBorderStyle.Render(strings.Repeat("─", innerWidth))}
 	start, end := visibleRange(len(m.apps), m.selectedIndex, max((lineCount-listHeaderLines-1)/rowLineCount, 0))
 	for index := start; index < end; index++ {
-		isSpacerTinted := index == m.selectedIndex || index-1 == m.selectedIndex
-		lines = append(lines, m.spacerLine(isSpacerTinted, innerWidth), m.appRow(m.apps[index], index == m.selectedIndex, nameWidth, innerWidth))
+		lines = append(lines, "", m.appRow(m.apps[index], index == m.selectedIndex, nameWidth, innerWidth))
 	}
-	return append(lines, m.spacerLine(end-1 == m.selectedIndex, innerWidth))
-}
-
-// spacerLine is the blank line between rows; the selected row tints the ones next to it.
-func (m AppsModel) spacerLine(isTinted bool, innerWidth int) string {
-	if !isTinted {
-		return ""
-	}
-	return lipgloss.NewStyle().Background(rowTint(m.hasDarkBackground)).Render(strings.Repeat(" ", innerWidth))
+	return append(lines, "")
 }
 
 // appRow pads each column as plain text before styling it. The selected row is tinted and

@@ -478,16 +478,19 @@ func TestSelectedRowTintFollowsALightBackground(t *testing.T) {
 	}
 }
 
-func TestSelectedRowIsTintedOnTheLinesAboveAndBelowToo(t *testing.T) {
+func TestOnlyTheSelectedAppsOwnLineIsTinted(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "First"}, api.App{Name: "Second"}, api.App{Name: "Third"})
 	m = pressRune(m, 'j')
 
-	lines := strings.Split(m.View().Content, "\n")
-	selected := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(plain(t, line), "▸") })
-	for offset, wantTint := range map[int]bool{-3: false, -1: true, 0: true, 1: true, 3: false} {
-		if got := strings.Contains(lines[selected+offset], "48;5;236"); got != wantTint {
-			t.Errorf("line %+d from the selected row: tinted = %v, want %v", offset, got, wantTint)
+	var tinted int
+	for _, line := range strings.Split(m.View().Content, "\n") {
+		if strings.Contains(line, "48;5;236") {
+			tinted++
+			assertViewContains(t, line, "▸ Second")
 		}
+	}
+	if tinted != 1 {
+		t.Fatalf("%d lines are tinted, want 1", tinted)
 	}
 }
 
