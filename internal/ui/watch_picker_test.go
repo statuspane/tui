@@ -84,6 +84,12 @@ func testCatalog() fakeProviderCatalog {
 	}
 }
 
+// The window the picker tests open in, unless they say otherwise.
+const (
+	testPickerWidth  = 100
+	testPickerHeight = 30
+)
+
 var (
 	keyTab    = tea.KeyPressMsg{Code: tea.KeyTab}
 	keySpace  = tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
@@ -107,7 +113,7 @@ func newTestPicker(backend fakePickerBackend, watched ...api.Component) WatchPic
 }
 
 func newTestPickerWithCache(backend fakePickerBackend, cache *componentCache, watched ...api.Component) WatchPickerModel {
-	return NewWatchPickerModel(backend, cache, openWatchPickerMsg{appSlug: "web-app", appName: "Web App", watchedComponents: watched}, 100, 30)
+	return NewWatchPickerModel(backend, cache, openWatchPickerMsg{appSlug: "web-app", appName: "Web App", watchedComponents: watched}, testPickerWidth, testPickerHeight)
 }
 
 // settleCursor lets the cursor rest where it is, which is what makes the picker ask the API about
@@ -1306,4 +1312,69 @@ func TestAGroupedListScrollsWithTheCursorAndTheHeadingsTakeRows(t *testing.T) {
 
 	assertViewContains(t, m.View().Content, "▸ [ ] C5")
 	assertViewLacks(t, m.View().Content, "A0")
+}
+
+func TestEscapeClearsAKeptComponentFilterInsteadOfClosingThePicker(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+	m, _ = m.Update(keyEnter)
+
+	m, cmd := m.Update(keyEscape)
+
+	assertNoSideEffects(t, cmd)
+	assertViewLacks(t, m.View().Content, "Filter:")
+	assertViewContains(t, m.View().Content, "API Requests", "Pages")
+}
+
+func TestEscapeClearsAKeptProviderFilterInsteadOfClosingThePicker(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "cloud")
+	m, _ = m.Update(keyEnter)
+
+	m, cmd := m.Update(keyEscape)
+
+	assertNoSideEffects(t, cmd)
+	assertViewLacks(t, m.View().Content, "Filter:")
+	assertViewContains(t, m.View().Content, "GitHub", "Cloudflare")
+}
+
+func TestEscapeClosesThePickerOnceNoFilterIsKept(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+	m, _ = m.Update(keyEnter)
+	m, _ = m.Update(keyEscape)
+
+	_, cmd := m.Update(keyEscape)
+
+	if _, closed := cmd().(closeWatchPickerMsg); !closed {
+		t.Fatal("the second esc should close the picker")
+	}
+}
+
+func TestOnlyTheFocusedPanesKeptFilterIsClearedByEscape(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "cloud")
+	m, _ = m.Update(keyEnter)
+	m, _ = m.Update(keyTab)
+
+	_, cmd := m.Update(keyEscape)
+
+	if _, closed := cmd().(closeWatchPickerMsg); !closed {
+		t.Fatal("esc on the components pane must not touch the providers filter")
+	}
+}
+
+func TestTheKeyBarSaysWhatEscapeDoes(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	assertViewContains(t, m.View().Content, "esc cancel")
+
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
+	m, _ = m.Update(keyEnter)
+	assertViewContains(t, m.View().Content, "esc clear filter")
+	assertViewLacks(t, m.View().Content, "esc cancel")
 }

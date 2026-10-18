@@ -41,7 +41,7 @@ sending a pane back to the top. The incidents panel is tinted by the worst activ
 
 The picker is two panels too (`pickerLayout`): the providers one as wide as its names need, at
 most half the width, and each has a bordered filter box, its rows padded to `rowCount` lines, a
-rule and a footer line. `rowCount` is the panel height minus `pickerPaneChromeHeight`, and the
+rule and a footer line. `rowCount` is the panel height minus `pickerPanelOverheadHeight`, and the
 panels are never shorter than room for `minPickerRows`, so a short window still shows the cursor
 row (the screen then runs past the window and is cut at the bottom). Anything too long for the
 header, like the discard question or a save error, goes in the `alertBar` that replaces the key

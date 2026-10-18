@@ -14,8 +14,9 @@ const (
 	sectionGap    = 1
 
 	headerHeight = 1
-	// footerHeight is one line of key hints inside a border.
-	footerHeight = 1 + borderCells
+	// oneLineBoxHeight is a box around a single line: the line and its two borders.
+	oneLineBoxHeight = 1 + borderCells
+	footerHeight     = oneLineBoxHeight
 
 	// Below this the frame would have no room for content; the terminal wraps what is left.
 	minChromeWidth = 20
@@ -35,7 +36,7 @@ const (
 	fallbackHeight = 24
 
 	// The gap between two panels side by side.
-	paneGapWidth = 2
+	panelGapWidth = 2
 
 	hintGap   = "  "
 	brandText = "◉ STATUSPANE"
@@ -133,7 +134,7 @@ func footerBar(hints []keyHint, trailing string, width int) string {
 // alertBar is a footer-shaped box with a red edge that says something the footer's keys must not
 // drown out, such as a question the user has to answer.
 func alertBar(message string, width int) string {
-	look := panelLook{border: errorStyle, title: errorStyle}
+	look := panelLook{border: errorStyle}
 	return panelWithLook(look, "", errorStyle.Render(message), max(width, minChromeWidth), footerHeight)
 }
 

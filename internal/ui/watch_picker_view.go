@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -19,28 +20,27 @@ const (
 
 	minPickerRows = 5 // room for a heading and a few rows under it
 
-	// A pane's filter box is a line inside a border; under the rows come a rule and a footer line.
-	filterBoxHeight        = 1 + borderCells
-	paneFooterLines        = 2
-	pickerPaneChromeHeight = panelChromeHeight + filterBoxHeight + paneFooterLines
+	// Under a panel's rows come a rule and a footer line, and above them the filter's box.
+	panelRuleAndFooterHeight  = 2
+	pickerPanelOverheadHeight = panelChromeHeight + oneLineBoxHeight + panelRuleAndFooterHeight
 
-	providersFilterHint  = "/ to filter providers"
-	componentsFilterHint = "/ to filter by name or group"
-	providersMatchScope  = "name, slug or category"
-	componentsMatchScope = "name or group"
+	providersFilterPlaceholder  = "/ to filter providers"
+	componentsFilterPlaceholder = "/ to filter by name or group"
+	providersMatchScope         = "name, slug or category"
+	componentsMatchScope        = "name or group"
 )
 
 func (m WatchPickerModel) View() tea.View {
 	layout := m.layout()
 	header := headerBar(m.headerLeft(), m.headerNotice(), layout.contentWidth)
-	panes := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.providersPanel(layout), strings.Repeat(" ", paneGapWidth), m.componentsPanel(layout))
-	return tea.NewView(stackedScreen(header, panes, m.footer(layout.contentWidth)))
+	panels := lipgloss.JoinHorizontal(lipgloss.Top,
+		m.providersPanel(layout), strings.Repeat(" ", panelGapWidth), m.componentsPanel(layout))
+	return tea.NewView(stackedScreen(header, panels, m.footer(layout.contentWidth)))
 }
 
 // pickerLayout is how the window is shared out: the width inside the margin, each panel's width,
 // the panels' height and how many rows of a list fit in one.
-type pickerLayout struct{ contentWidth, providersWidth, componentsWidth, paneHeight, rowCount int }
+type pickerLayout struct{ contentWidth, providersWidth, componentsWidth, panelHeight, rowCount int }
 
 // layout gives the providers panel what its content needs, but no more than half the width, and
 // the components panel the rest. The panels are never shorter than room for minPickerRows, so a
@@ -48,10 +48,16 @@ type pickerLayout struct{ contentWidth, providersWidth, componentsWidth, paneHei
 func (m WatchPickerModel) layout() pickerLayout {
 	windowWidth, windowHeight := withFallbackSize(m.width, m.height)
 	contentWidth := layoutWidth(windowWidth)
-	panelSpace := contentWidth - paneGapWidth
+	panelSpace := contentWidth - panelGapWidth
 	providersWidth := min(m.providersWidth()+panelChromeWidth, panelSpace/2)
-	paneHeight := max(bodyHeight(windowHeight), pickerPaneChromeHeight+minPickerRows)
-	return pickerLayout{contentWidth, providersWidth, panelSpace - providersWidth, paneHeight, paneHeight - pickerPaneChromeHeight}
+	panelHeight := max(bodyHeight(windowHeight), pickerPanelOverheadHeight+minPickerRows)
+	return pickerLayout{
+		contentWidth:    contentWidth,
+		providersWidth:  providersWidth,
+		componentsWidth: panelSpace - providersWidth,
+		panelHeight:     panelHeight,
+		rowCount:        panelHeight - pickerPanelOverheadHeight,
+	}
 }
 
 func (m WatchPickerModel) visibleRowCount() int {
@@ -106,14 +112,16 @@ func (m WatchPickerModel) footer(contentWidth int) string {
 	if m.providersFilter.active || m.componentsFilter.active {
 		return footerBar(filteringHints, "", contentWidth)
 	}
-	escapeLabel := "cancel"
-	if m.focusedFilter().isNarrowing() {
-		escapeLabel = "clear filter"
-	}
-	return footerBar(m.keyHints(), renderHint(keyHint{"esc", escapeLabel}), contentWidth)
+	return footerBar(m.keyHints(), renderHint(m.escapeHint()), contentWidth)
 }
 
-var filteringHints = []keyHint{{"type", "to filter"}, {"⏎", "keep"}, {"esc", "clear"}}
+// escapeHint says what esc does now: clear the focused pane's kept filter, or cancel the picker.
+func (m WatchPickerModel) escapeHint() keyHint {
+	if m.focusedFilter().isNarrowing() {
+		return keyHint{"esc", "clear filter"}
+	}
+	return keyHint{"esc", "cancel"}
+}
 
 func (m WatchPickerModel) keyHints() []keyHint {
 	if m.focusedPane == providersPane {
@@ -123,18 +131,18 @@ func (m WatchPickerModel) keyHints() []keyHint {
 }
 
 func (m WatchPickerModel) providersPanel(layout pickerLayout) string {
-	contentWidth, _ := panelContentSize(layout.providersWidth, layout.paneHeight)
-	box := filterBox(m.providersFilter, providersFilterHint, len(m.visibleProviders()), providersMatchScope, contentWidth)
+	panelContentWidth, _ := panelContentSize(layout.providersWidth, layout.panelHeight)
+	filterBoxView := filterBox(m.providersFilter, providersFilterPlaceholder, len(m.visibleProviders()), providersMatchScope, panelContentWidth)
 	footer := mutedStyle.Render(fmt.Sprintf("%d watched in total", m.selection.chosenCount()))
-	body := paneBody(box, m.providerLines(), layout.rowCount, footer, contentWidth)
-	return panelWithLook(untintedPanelLook(m.focusedPane == providersPane), "Providers", body, layout.providersWidth, layout.paneHeight)
+	body := stackedPanelBody(filterBoxView, m.providerLines(), layout.rowCount, footer, panelContentWidth)
+	return panelWithLook(untintedPanelLook(m.focusedPane == providersPane), "Providers", body, layout.providersWidth, layout.panelHeight)
 }
 
 func (m WatchPickerModel) componentsPanel(layout pickerLayout) string {
-	contentWidth, _ := panelContentSize(layout.componentsWidth, layout.paneHeight)
-	box := filterBox(m.componentsFilter, componentsFilterHint, len(m.visibleComponents()), componentsMatchScope, contentWidth)
-	body := paneBody(box, m.componentLines(), layout.rowCount, componentsLegend(), contentWidth)
-	return panelWithLook(untintedPanelLook(m.focusedPane == componentsPane), m.componentsTitle(), body, layout.componentsWidth, layout.paneHeight)
+	panelContentWidth, _ := panelContentSize(layout.componentsWidth, layout.panelHeight)
+	filterBoxView := filterBox(m.componentsFilter, componentsFilterPlaceholder, len(m.visibleComponents()), componentsMatchScope, panelContentWidth)
+	body := stackedPanelBody(filterBoxView, m.componentLines(), layout.rowCount, componentsLegend(), panelContentWidth)
+	return panelWithLook(untintedPanelLook(m.focusedPane == componentsPane), m.componentsTitle(), body, layout.componentsWidth, layout.panelHeight)
 }
 
 // componentsTitle names the provider under the cursor and how many components it has, once known.
@@ -144,8 +152,8 @@ func (m WatchPickerModel) componentsTitle() string {
 		return "Components"
 	}
 	title := provider.Name + " components"
-	if all, loaded := m.providerComponents(); loaded {
-		title += fmt.Sprintf(" · %d", len(all))
+	if listed, loaded := m.providerComponents(); loaded {
+		title += fmt.Sprintf(" · %d", len(listed))
 	}
 	return title
 }
@@ -155,43 +163,12 @@ func componentsLegend() string {
 		mutedStyle.Render(" to stop · saved with ") + keyStyle.Render("s")
 }
 
-// paneBody stacks a pane's filter box, its rows padded to rowCount lines, a rule and its footer,
-// so the footer stays at the bottom however few rows there are.
-func paneBody(filterBox string, rows []string, rowCount int, footer string, contentWidth int) string {
-	rows = rows[:min(len(rows), rowCount)]
-	for len(rows) < rowCount {
-		rows = append(rows, "")
-	}
-	rule := panelBorderStyle.Render(strings.Repeat("┄", contentWidth))
-	return strings.Join([]string{filterBox, strings.Join(rows, "\n"), rule, footer}, "\n")
-}
-
-// filterBox is the pane's filter in a box of its own, with how many items match at the right while
-// a query is being typed or kept, and what they match on when there is room. The box takes the
-// accent colour while it has the focus.
-func filterBox(filter paneFilter, hint string, matchCount int, scope string, width int) string {
-	lineWidth := width - panelChromeWidth
-	left := filter.line(hint)
-	right := ""
-	if filter.active || filter.isNarrowing() {
-		right = matchCountText(matchCount, scope)
-		if lipgloss.Width(left)+1+lipgloss.Width(right) > lineWidth {
-			right = matchCountText(matchCount, "")
-		}
-	}
-	return panelWithLook(untintedPanelLook(filter.active), "", headerBar(left, mutedStyle.Render(right), lineWidth), width, filterBoxHeight)
-}
-
-// matchCountText is "3 matches · name or group"; without a scope, just the count.
-func matchCountText(count int, scope string) string {
-	text := fmt.Sprintf("%d matches", count)
-	if count == 1 {
-		text = "1 match"
-	}
-	if scope == "" {
-		return text
-	}
-	return text + " · " + scope
+// stackedPanelBody stacks a panel's filter box, its rows padded to rowCount lines, a rule and its
+// footer, so the footer stays at the bottom however few rows there are.
+func stackedPanelBody(filterBoxView string, rows []string, rowCount int, panelFooter string, panelContentWidth int) string {
+	paddedRows := append(slices.Clone(rows), make([]string, max(rowCount-len(rows), 0))...)
+	rule := panelBorderStyle.Render(strings.Repeat("┄", panelContentWidth))
+	return strings.Join([]string{filterBoxView, strings.Join(paddedRows, "\n"), rule, panelFooter}, "\n")
 }
 
 // providerLines are the provider rows to draw, or, when there are none, why.

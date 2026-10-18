@@ -1,20 +1,19 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-
-	"github.com/statuspane/tui/internal/api"
 )
 
 func TestThePickerIsTwoTitledPanelsThatFillTheWindow(t *testing.T) {
 	view := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()}).View().Content
 
 	assertViewContains(t, view, "◉ STATUSPANE › Web App › Watch components", "╭─ Providers", "╭─ GitHub components · 2")
-	assertEveryLineHasWidth(t, view, 100)
-	assertHeightIs(t, view, 30)
+	assertEveryLineHasWidth(t, view, testPickerWidth)
+	assertHeightIs(t, view, testPickerHeight)
 }
 
 func TestThePickerRedrawsAtTheNewWindowSize(t *testing.T) {
@@ -34,11 +33,16 @@ func TestTheHeaderCountsTheUnsavedChanges(t *testing.T) {
 }
 
 func TestTheProvidersPanelSaysHowManyComponentsAreWatchedInTotal(t *testing.T) {
-	backend := fakePickerBackend{fakeProviderCatalog: testCatalog()}
-	m := pickerOnComponents(backend, component("github", "api"), component("cloudflare", "cdn"))
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()}, component("github", "api"), component("cloudflare", "cdn"))
 
 	assertViewContains(t, m.View().Content, "2 watched in total")
+}
+
+func TestTheWatchedTotalFollowsTheSelection(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()}, component("github", "api"), component("cloudflare", "cdn"))
+
 	m, _ = m.Update(keySpace)
+
 	assertViewContains(t, m.View().Content, "1 watched in total")
 }
 
@@ -48,15 +52,28 @@ func TestTheComponentsPanelHasTheLegend(t *testing.T) {
 	assertViewContains(t, view, "[+] to watch", "[-] to stop", "saved with s")
 }
 
-func TestAFilterBoxCountsItsMatchesWhileItIsInUse(t *testing.T) {
+func TestAnIdleFilterBoxShowsNoMatchCount(t *testing.T) {
 	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+
 	assertViewLacks(t, m.View().Content, "match")
+}
+
+func TestAFilterBoxCountsItsMatchesWhileTyping(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
 
 	m, _ = m.Update(keySlash)
 	m = typeIntoPicker(m, "pag")
+
 	assertViewContains(t, m.View().Content, "1 match · name or group")
+}
+
+func TestAKeptFilterStillShowsItsQueryAndMatchCount(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+	m, _ = m.Update(keySlash)
+	m = typeIntoPicker(m, "pag")
 
 	m, _ = m.Update(keyEnter)
+
 	assertViewContains(t, m.View().Content, "Filter: pag", "1 match")
 }
 
@@ -69,38 +86,55 @@ func TestTheProviderFilterBoxCountsItsMatchesToo(t *testing.T) {
 	assertViewContains(t, m.View().Content, "/ c", "1 match")
 }
 
-func TestTheFocusedPanelHasTheAccentEdge(t *testing.T) {
-	accent := escapeBefore(untintedPanelLook(true).border.Render("x")) + "╭─ "
-	quiet := escapeBefore(untintedPanelLook(false).border.Render("x")) + "╭─ "
-	// panelTops is the top edge of the providers panel, the one on the left of the line.
-	panelTops := func(m WatchPickerModel) string {
-		for _, line := range strings.Split(m.View().Content, "\n") {
-			if index := strings.Index(line, "Providers"); index >= 0 {
-				return line[:index]
-			}
+// providersPanelEdge is what is drawn on the top line of the screen to the left of the providers'
+// title: the corner of the providers panel, with its colour.
+func providersPanelEdge(t *testing.T, m WatchPickerModel) string {
+	t.Helper()
+	for _, line := range strings.Split(m.View().Content, "\n") {
+		if index := strings.Index(line, "Providers"); index >= 0 {
+			return line[:index]
 		}
-		return ""
 	}
+	t.Fatal("no providers panel")
+	return ""
+}
+
+func TestTheFocusedPanelHasTheAccentEdge(t *testing.T) {
 	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
 
-	if !strings.Contains(panelTops(m), accent) {
+	if !strings.Contains(providersPanelEdge(t, m), escapeBefore(untintedPanelLook(true).border.Render("x"))) {
 		t.Fatal("the providers panel has the focus and should have the accent edge")
 	}
+}
+
+func TestAPanelThatLostTheFocusIsQuiet(t *testing.T) {
+	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+
 	m, _ = m.Update(keyTab)
-	if strings.Contains(panelTops(m), accent) || !strings.Contains(panelTops(m), quiet) {
+
+	if !strings.Contains(providersPanelEdge(t, m), escapeBefore(untintedPanelLook(false).border.Render("x"))) {
 		t.Fatal("the providers panel lost the focus and should be quiet")
 	}
 }
 
-func TestTheKeyHintsFollowTheFocus(t *testing.T) {
+func TestTheProvidersFocusHasItsOwnKeyHints(t *testing.T) {
 	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+
 	assertViewContains(t, m.View().Content, "/ filter", "esc cancel")
 	assertViewLacks(t, m.View().Content, "g group")
+}
 
-	m, _ = m.Update(keyTab)
+func TestTheComponentsFocusHasItsOwnKeyHints(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
+
 	assertViewContains(t, m.View().Content, "space toggle", "g group", "/ filter")
+}
+
+func TestWhileFilteringTheKeyBarSaysHowToLeaveTheBox(t *testing.T) {
+	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
 
 	m, _ = m.Update(keySlash)
+
 	assertViewContains(t, m.View().Content, "type to filter", "⏎ keep", "esc clear")
 	assertViewLacks(t, m.View().Content, "esc cancel")
 }
@@ -117,83 +151,29 @@ func TestTheDiscardQuestionReplacesTheKeyHintsUntilAnswered(t *testing.T) {
 	assertViewLacks(t, m.View().Content, "Discard")
 }
 
-func TestAShortWindowStillShowsTheCursorRowAndKeepsTheFooter(t *testing.T) {
+// shortWindowHeight is below what the panels need, so the picker has to make room for its rows.
+const (
+	shortWindowHeight = 10
+	longListSize      = 20
+	rowsScrolled      = 12
+)
+
+func catalogWithManyComponents() fakeProviderCatalog {
 	catalog := testCatalog()
 	catalog.components["github"] = nil
-	for index := range 20 {
-		catalog.components["github"] = append(catalog.components["github"], namedComponent("github", "c"+string(rune('a'+index)), "Component "+string(rune('A'+index)), nil))
+	for index := range longListSize {
+		catalog.components["github"] = append(catalog.components["github"], namedComponent("github", fmt.Sprint(index), fmt.Sprintf("Component %d", index), nil))
 	}
-	m := NewWatchPickerModel(fakePickerBackend{fakeProviderCatalog: catalog}, newTestCache(), openWatchPickerMsg{appSlug: "web-app", appName: "Web App", watchedComponents: []api.Component{}}, 100, 10)
+	return catalog
+}
+
+func TestAShortWindowStillShowsTheCursorRowAndTheFooter(t *testing.T) {
+	m := NewWatchPickerModel(fakePickerBackend{fakeProviderCatalog: catalogWithManyComponents()}, newTestCache(), openWatchPickerMsg{appSlug: "web-app", appName: "Web App"}, testPickerWidth, shortWindowHeight)
 	m = settle(m, m.Init())
 	m, _ = m.Update(keyTab)
-	for range 12 {
+	for range rowsScrolled {
 		m, _ = m.Update(keyJ)
 	}
 
-	assertViewContains(t, m.View().Content, "▸ [ ] Component M")
-}
-
-func TestEscapeClearsAKeptComponentFilterInsteadOfClosingThePicker(t *testing.T) {
-	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
-	m, _ = m.Update(keySlash)
-	m = typeIntoPicker(m, "pag")
-	m, _ = m.Update(keyEnter)
-
-	m, cmd := m.Update(keyEscape)
-
-	assertNoSideEffects(t, cmd)
-	assertViewLacks(t, m.View().Content, "Filter:")
-	assertViewContains(t, m.View().Content, "API Requests", "Pages")
-}
-
-func TestEscapeClearsAKeptProviderFilterInsteadOfClosingThePicker(t *testing.T) {
-	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
-	m, _ = m.Update(keySlash)
-	m = typeIntoPicker(m, "cloud")
-	m, _ = m.Update(keyEnter)
-
-	m, cmd := m.Update(keyEscape)
-
-	assertNoSideEffects(t, cmd)
-	assertViewLacks(t, m.View().Content, "Filter:")
-	assertViewContains(t, m.View().Content, "GitHub", "Cloudflare")
-}
-
-func TestEscapeClosesThePickerOnceNoFilterIsKept(t *testing.T) {
-	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
-	m, _ = m.Update(keySlash)
-	m = typeIntoPicker(m, "pag")
-	m, _ = m.Update(keyEnter)
-	m, _ = m.Update(keyEscape)
-
-	_, cmd := m.Update(keyEscape)
-
-	if _, closed := cmd().(closeWatchPickerMsg); !closed {
-		t.Fatal("the second esc should close the picker")
-	}
-}
-
-func TestOnlyTheFocusedPanesKeptFilterIsClearedByEscape(t *testing.T) {
-	m := openedPicker(fakePickerBackend{fakeProviderCatalog: testCatalog()})
-	m, _ = m.Update(keySlash)
-	m = typeIntoPicker(m, "cloud")
-	m, _ = m.Update(keyEnter)
-	m, _ = m.Update(keyTab)
-
-	_, cmd := m.Update(keyEscape)
-
-	if _, closed := cmd().(closeWatchPickerMsg); !closed {
-		t.Fatal("esc on the components pane must not touch the providers filter")
-	}
-}
-
-func TestTheKeyBarSaysWhatEscapeDoes(t *testing.T) {
-	m := pickerOnComponents(fakePickerBackend{fakeProviderCatalog: testCatalog()})
-	assertViewContains(t, m.View().Content, "esc cancel")
-
-	m, _ = m.Update(keySlash)
-	m = typeIntoPicker(m, "pag")
-	m, _ = m.Update(keyEnter)
-	assertViewContains(t, m.View().Content, "esc clear filter")
-	assertViewLacks(t, m.View().Content, "esc cancel")
+	assertViewContains(t, m.View().Content, fmt.Sprintf("▸ [ ] Component %d", rowsScrolled), "watched in total", "switch pane")
 }

@@ -31,13 +31,16 @@ func (m WatchPickerModel) focusedFilter() paneFilter {
 	return m.componentsFilter
 }
 
-// clearFocusedFilter drops the kept query of the pane that has the focus, the way esc does inside
-// its box: the cursor goes back to the first match.
-func (m WatchPickerModel) clearFocusedFilter(keyPress tea.KeyPressMsg) (WatchPickerModel, tea.Cmd) {
+// clearFocusedFilter drops the kept query of the pane that has the focus and puts that pane's
+// cursor back on its first item, as esc does inside the box.
+func (m WatchPickerModel) clearFocusedFilter() (WatchPickerModel, tea.Cmd) {
 	if m.focusedPane == providersPane {
-		return m.handleProvidersFilterKey(keyPress)
+		m.providersFilter = m.providersFilter.cleared()
+		return m.landOnProvider(0)
 	}
-	return m.handleComponentsFilterKey(keyPress)
+	m.componentsFilter = m.componentsFilter.cleared()
+	m.componentIndex = 0
+	return m, nil
 }
 
 // handleProvidersFilterKey narrows the providers as the user types and puts the cursor on the
