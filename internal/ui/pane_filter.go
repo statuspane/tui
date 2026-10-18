@@ -7,9 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// filteringHelpText is the help line while a filter box has the focus.
-const filteringHelpText = "type to filter · ⏎ keep · esc clear"
-
 // paneFilter is the text box that narrows one pane's list as the user types.
 type paneFilter struct {
 	input  textinput.Model

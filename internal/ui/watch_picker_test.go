@@ -221,7 +221,7 @@ func TestToggleMarksAnAdditionAndCountsTheChange(t *testing.T) {
 	m, _ = m.Update(keyJ)
 	m, _ = m.Update(keySpace)
 
-	assertViewContains(t, m.View().Content, "[x] API Requests", "[+] Pages", "1 change not saved yet")
+	assertViewContains(t, m.View().Content, "[x] API Requests", "[+] Pages", "1 unsaved change")
 }
 
 func TestToggleMarksARemovalAndTogglingBackClearsIt(t *testing.T) {
@@ -232,7 +232,7 @@ func TestToggleMarksARemovalAndTogglingBackClearsIt(t *testing.T) {
 	m, _ = m.Update(keySpace)
 
 	assertViewContains(t, m.View().Content, "[x] API Requests")
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestSpaceDoesNothingWhileTheProvidersHaveTheFocus(t *testing.T) {
@@ -240,7 +240,7 @@ func TestSpaceDoesNothingWhileTheProvidersHaveTheFocus(t *testing.T) {
 
 	m, _ = m.Update(keySpace)
 
-	assertViewLacks(t, m.View().Content, "not saved yet", "[-]")
+	assertViewLacks(t, m.View().Content, "unsaved change", "[-] API Requests")
 }
 
 func TestEnterOnTheProvidersMovesTheFocusToTheComponents(t *testing.T) {
@@ -736,7 +736,7 @@ func TestEnterKeepsTheProviderFilterAndTheKeysWorkAgain(t *testing.T) {
 	m = settle(m, fetch)
 	m, _ = m.Update(keyTab)
 	m, _ = m.Update(keySpace)
-	assertViewContains(t, m.View().Content, "[+] CDN", "1 change not saved yet")
+	assertViewContains(t, m.View().Content, "[+] CDN", "1 unsaved change")
 }
 
 func TestEscapeInTheProviderFilterClearsItAndPutsTheCursorOnTheFirstProvider(t *testing.T) {
@@ -851,7 +851,7 @@ func TestEnterKeepsTheComponentFilterAndSpaceActsOnTheFilteredRow(t *testing.T) 
 	m, _ = m.Update(keyEnter)
 	m, _ = m.Update(keySpace)
 
-	assertViewContains(t, m.View().Content, "Filter: pag", "[+] Pages", "1 change not saved yet")
+	assertViewContains(t, m.View().Content, "Filter: pag", "[+] Pages", "1 unsaved change")
 	assertViewLacks(t, m.View().Content, "API Requests")
 }
 
@@ -1151,12 +1151,12 @@ func TestGTogglesTheWholeGroupAndAgainBringsItBack(t *testing.T) {
 	m := groupedPicker()
 
 	m, _ = m.Update(keyG)
-	assertViewContains(t, m.View().Content, "[+] API Requests", "[+] Git Operations", "Core  2/2 watched", "2 changes not saved yet")
+	assertViewContains(t, m.View().Content, "[+] API Requests", "[+] Git Operations", "Core  2/2 watched", "2 unsaved changes")
 	assertViewLacks(t, m.View().Content, "[+] Webhooks")
 	m, _ = m.Update(keyG)
 
 	assertViewContains(t, m.View().Content, "[ ] API Requests", "[ ] Git Operations", "Core  0/2 watched")
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestGChoosesTheRestOfAGroupThatIsPartlyChosen(t *testing.T) {
@@ -1164,7 +1164,7 @@ func TestGChoosesTheRestOfAGroupThatIsPartlyChosen(t *testing.T) {
 
 	m, _ = m.Update(keyG)
 
-	assertViewContains(t, m.View().Content, "[x] API Requests", "[+] Git Operations", "Core  2/2 watched", "1 change not saved yet")
+	assertViewContains(t, m.View().Content, "[x] API Requests", "[+] Git Operations", "Core  2/2 watched", "1 unsaved change")
 }
 
 func TestGUnchoosesAGroupThatIsFullyWatched(t *testing.T) {
@@ -1172,7 +1172,7 @@ func TestGUnchoosesAGroupThatIsFullyWatched(t *testing.T) {
 
 	m, _ = m.Update(keyG)
 
-	assertViewContains(t, m.View().Content, "[-] API Requests", "[-] Git Operations", "Core  0/2 watched", "2 changes not saved yet")
+	assertViewContains(t, m.View().Content, "[-] API Requests", "[-] Git Operations", "Core  0/2 watched", "2 unsaved changes")
 }
 
 func TestGActsOnlyOnTheComponentsAFilterLetsThrough(t *testing.T) {
@@ -1215,7 +1215,7 @@ func TestGChoosesAGroupWhoseWatchedComponentWasUnwatched(t *testing.T) {
 	m, _ = m.Update(keyG)
 
 	assertViewContains(t, m.View().Content, "[x] API Requests", "[x] Git Operations", "Core  2/2 watched")
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestGWorksFromTheFirstAndTheLastComponentOfAGroup(t *testing.T) {
@@ -1245,7 +1245,7 @@ func TestGDoesNothingOutsideTheComponentsPane(t *testing.T) {
 
 	m, _ = m.Update(keyG)
 
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestGBeforeTheComponentsHaveLoadedDoesNothing(t *testing.T) {
@@ -1257,7 +1257,7 @@ func TestGBeforeTheComponentsHaveLoadedDoesNothing(t *testing.T) {
 	m, _ = m.Update(keyG)
 
 	assertViewContains(t, m.View().Content, "Loading…")
-	assertViewLacks(t, m.View().Content, "not saved yet")
+	assertViewLacks(t, m.View().Content, "unsaved change")
 }
 
 func TestSavingAfterGSendsTheWholeSetIncludingOtherGroupsAndProviders(t *testing.T) {
