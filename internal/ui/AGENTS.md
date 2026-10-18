@@ -2,7 +2,7 @@
 
 Bubble Tea v2 screens: `RootModel` (which screen is showing) → `AppsModel` (list) and
 `AppDetailModel` (one app), `WatchPickerModel` (choose an app's components) on top of the
-detail, or a dialog (`createAppDialog`, `deleteAppDialog`) instead of any of them.
+detail, or a dialog (`createAppDialog`, `deleteAppDialog`) drawn over any of them.
 
 ## Patterns
 
@@ -47,6 +47,12 @@ row (the screen then runs past the window and is cut at the bottom). Anything to
 header, like the discard question or a save error, goes in the `alertBar` that replaces the key
 bar. The key hints are dropped from the right when they don't fit, so keep the likeliest ones
 first and the labels short.
+
+A dialog's `view()` is just its box (`dialogBox`: a fixed-width panel, `dialogWidth`); the root puts
+it in the middle of the screen behind it with `centeredOver`, which composes the two with
+lipgloss's compositor, so the screen stays visible around the box and keeps working underneath
+(it is not dimmed). Long text inside a dialog goes through `wrappedText`, because a panel cuts
+what doesn't fit; a panel also cuts a title that is too long, such as an app's name.
 
 ## Gotchas
 
