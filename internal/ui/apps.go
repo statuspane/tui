@@ -27,8 +27,12 @@ const (
 	// The status and watching columns have a fixed width; the name takes what is left of the row.
 	statusColumnWidth   = 24
 	watchingColumnWidth = 16
-	// listHeaderLines are the column header and the rule under it.
-	listHeaderLines = 2
+	// listHeaderLines are the blank line, the column header and the rule under it.
+	listHeaderLines = 3
+	// rowLineCount is an app's row and the spacer line above it.
+	rowLineCount = 2
+	// rowPaddingX is the space between the edge of the list and a row's content.
+	rowPaddingX = 2
 
 	nameColumn     = "NAME"
 	statusColumn   = "STATUS"
@@ -251,18 +255,29 @@ func (m AppsModel) refreshStatus() string {
 	return ""
 }
 
-// listLines is the column header, a rule under it and as many rows as fit in lineCount lines,
-// scrolled to keep the selected one in view.
+// listLines is a blank line, the column header, a rule under it, and as many app rows as fit
+// in lineCount lines, scrolled to keep the selected one in view. Rows are separated by a spacer
+// line, which the selected row's tint covers above and below it.
 func (m AppsModel) listLines(innerWidth, lineCount int) []string {
-	nameWidth := max(innerWidth-lipgloss.Width(selectionMarker)-2*lipgloss.Width(columnGap)-statusColumnWidth-watchingColumnWidth, len(nameColumn))
-	columnHeader := noSelectionMarker + padRight(nameColumn, nameWidth) + columnGap + padRight(statusColumn, statusColumnWidth) + columnGap + watchingColumn
+	nameWidth := max(innerWidth-2*rowPaddingX-lipgloss.Width(selectionMarker)-2*lipgloss.Width(columnGap)-statusColumnWidth-watchingColumnWidth, len(nameColumn))
+	rowPadding := strings.Repeat(" ", rowPaddingX)
+	columnHeader := rowPadding + noSelectionMarker + padRight(nameColumn, nameWidth) + columnGap + padRight(statusColumn, statusColumnWidth) + columnGap + watchingColumn
 
-	lines := []string{mutedStyle.Render(columnHeader), panelBorderStyle.Render(strings.Repeat("─", innerWidth))}
-	start, end := visibleRange(len(m.apps), m.selectedIndex, max(lineCount-listHeaderLines, 0))
+	lines := []string{"", mutedStyle.Render(columnHeader), panelBorderStyle.Render(strings.Repeat("─", innerWidth))}
+	start, end := visibleRange(len(m.apps), m.selectedIndex, max((lineCount-listHeaderLines-1)/rowLineCount, 0))
 	for index := start; index < end; index++ {
-		lines = append(lines, m.appRow(m.apps[index], index == m.selectedIndex, nameWidth, innerWidth))
+		isSpacerTinted := index == m.selectedIndex || index-1 == m.selectedIndex
+		lines = append(lines, m.spacerLine(isSpacerTinted, innerWidth), m.appRow(m.apps[index], index == m.selectedIndex, nameWidth, innerWidth))
 	}
-	return lines
+	return append(lines, m.spacerLine(end-1 == m.selectedIndex, innerWidth))
+}
+
+// spacerLine is the blank line between rows; the selected row tints the ones next to it.
+func (m AppsModel) spacerLine(isTinted bool, innerWidth int) string {
+	if !isTinted {
+		return ""
+	}
+	return lipgloss.NewStyle().Background(rowTint(m.hasDarkBackground)).Render(strings.Repeat(" ", innerWidth))
 }
 
 // appRow pads each column as plain text before styling it. The selected row is tinted and
@@ -273,15 +288,17 @@ func (m AppsModel) appRow(app api.App, isSelected bool, nameWidth, innerWidth in
 	name := padRight(clipTo(app.Name, nameWidth), nameWidth)
 	status := padRight(bullet+appearance.label, statusColumnWidth)
 	watchedComponents := fmt.Sprintf("%d components", app.WatchedComponentsCount)
+	rowPadding := strings.Repeat(" ", rowPaddingX)
 
 	if !isSelected {
-		return noSelectionMarker + name + columnGap + appearance.style.Render(status) + columnGap + mutedStyle.Render(watchedComponents)
+		return rowPadding + noSelectionMarker + name + columnGap + appearance.style.Render(status) + columnGap + mutedStyle.Render(watchedComponents)
 	}
-	tint := lipgloss.NewStyle().Background(rowTint(m.hasDarkBackground))
-	row := accentStyle.Background(rowTint(m.hasDarkBackground)).Render(selectionMarker) +
+	tintColor := rowTint(m.hasDarkBackground)
+	tint := lipgloss.NewStyle().Background(tintColor)
+	row := tint.Render(rowPadding) + accentStyle.Background(tintColor).Render(selectionMarker) +
 		tint.Bold(true).Render(name) + tint.Render(columnGap) +
-		appearance.style.Background(rowTint(m.hasDarkBackground)).Render(status) + tint.Render(columnGap) +
-		mutedStyle.Background(rowTint(m.hasDarkBackground)).Render(padRight(watchedComponents, watchingColumnWidth))
+		appearance.style.Background(tintColor).Render(status) + tint.Render(columnGap) +
+		mutedStyle.Background(tintColor).Render(padRight(watchedComponents, watchingColumnWidth))
 	return row + tint.Render(strings.Repeat(" ", max(innerWidth-lipgloss.Width(row), 0)))
 }
 
