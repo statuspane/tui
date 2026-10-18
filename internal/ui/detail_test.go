@@ -351,3 +351,13 @@ func TestTheIncidentsPaneIsTintedByTheWorstIncident(t *testing.T) {
 		t.Fatal("the incidents panel should use the major impact colour")
 	}
 }
+
+func TestTheIncidentsPaneIsOnTheRight(t *testing.T) {
+	m := newTestDetailModel()
+	m, _ = sendDetail(m, appDetailLoadedMsg{appDetail: degradedAppDetail()})
+
+	panelTops := plain(t, strings.Split(m.View().Content, "\n")[3])
+	if strings.Index(panelTops, "Watched components") > strings.Index(panelTops, "Active incidents") {
+		t.Fatalf("want the components on the left and the incidents on the right: %q", panelTops)
+	}
+}

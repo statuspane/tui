@@ -195,7 +195,7 @@ func (m AppDetailModel) View() tea.View {
 
 	header := headerBar(m.headerLeft(), m.headerRight(), width)
 	panes := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.incidentsPanel(incidentsWidth, panelHeight), strings.Repeat(" ", paneGapWidth), m.componentsPanel(componentsWidth, panelHeight))
+		m.componentsPanel(componentsWidth, panelHeight), strings.Repeat(" ", paneGapWidth), m.incidentsPanel(incidentsWidth, panelHeight))
 	return tea.NewView(stackedScreen(header, panes, footerBar(detailHints, m.footerTrailing(), width)))
 }
 
