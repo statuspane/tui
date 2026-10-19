@@ -44,16 +44,33 @@ in the file, for example to use a local server. Environment variables win over t
 ./statuspane-tui
 ```
 
-`↑/↓` move, `enter` opens an app, `esc` goes back, `n` creates an app, `e` renames the selected
-app, `d` deletes it (you type its name to confirm), `r` refreshes, `q` quits. On an app's screen,
-`w` opens the component picker: choose a provider, `space` watches or unwatches a component, `g`
-watches or unwatches the whole group under the cursor (the components you can see), `r` asks again
-for the provider on screen, and `s` saves. `/` filters the pane that has the focus as you type
-(`enter` keeps the filter, `esc` clears it): on the providers by name, slug or category, on the
-components by name or group. Filtering makes no request, and a component filter belongs to the
-provider it was typed for; the API cannot search across providers. The API allows 60 requests a
-minute per key, so the picker loads a provider only once the cursor rests on it and remembers
-what it loaded for five minutes.
+The TUI fills the terminal and uses its colours, so it follows your theme. `↑/↓` (or `k`/`j`)
+move, and `ctrl+c` quits from anywhere. The key bar at the bottom of each screen shows the keys
+that work there.
+
+**Apps list.** The header counts your apps in each status. `enter` opens the selected app, `n`
+creates an app, `e` renames the selected one, `d` deletes it (you type its name to confirm), `r`
+refreshes, and `q` quits. The list refreshes itself every 30 seconds.
+
+**An app's screen.** Its watched components are on the left, its active incidents on the right.
+`tab` moves the focus between the two panes; `↑/↓` and page up/down scroll the one that has it,
+and `↓ N more` says how many lines are below. `w` opens the component picker, `e` renames the
+app, `d` deletes it, `r` refreshes, `esc` goes back, and `q` quits.
+
+**The component picker.** Providers are on the left and the selected provider's components on
+the right; `tab` switches between them (`enter` on a provider does too). `space` watches or
+unwatches a component, `g` watches or unwatches the whole group under the cursor (the components
+you can see), `r` asks again for the provider on screen, and `s` saves; nothing is saved until
+then, and the header says how many changes are waiting. `/` filters the pane that has the focus
+as you type: `enter` keeps the filter, and `esc` clears a kept filter. With no filter kept, `esc`
+cancels the picker, asking first when there are unsaved changes (press it again to discard).
+Providers are filtered by name, slug or category, components by name or group. Filtering makes
+no request, and a component filter belongs to the provider it was typed for; the API cannot
+search across providers. The API allows 60 requests a minute per key, so the picker loads a
+provider only once the cursor rests on it and remembers what it loaded for five minutes.
+
+**Dialogs.** Creating, renaming and deleting an app open a box over the screen. `enter` confirms,
+`esc` cancels, and an error from the API shows in the box and keeps it open.
 
 ## Develop
 
