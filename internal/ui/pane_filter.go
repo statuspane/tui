@@ -96,7 +96,7 @@ func filterBox(filter paneFilter, placeholder string, matchCount int, scope stri
 			right = matchCountText(matchCount, "")
 		}
 	}
-	return panelWithLook(untintedPanelLook(filter.active), "", headerBar(left, mutedStyle.Render(right), lineWidth), width, oneLineBoxHeight)
+	return inputBox(left, mutedStyle.Render(right), untintedPanelLook(filter.active), width)
 }
 
 // matchCountText is "3 matches · name or group"; without a scope, just the count.

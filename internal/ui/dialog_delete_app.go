@@ -6,7 +6,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 // AppDeleter is the one thing the delete dialog needs from the API client; tests pass a fake.
@@ -95,21 +94,22 @@ func (d deleteAppDialog) nameMatches() bool {
 
 func (d deleteAppDialog) view() string {
 	lines := []string{
-		errorStyle.Bold(true).Render("Delete " + d.name + "?"),
-		"",
-		"It stops watching " + componentsText(d.componentCount) + ". This can't be undone.",
+		wrappedText("It stops watching " + componentsText(d.componentCount) + ". This can't be undone."),
 		"",
 		mutedStyle.Render("Type the app's name to confirm:"),
-		d.input.View(),
+		inputBox(d.input.View(), "", defaultPanelLook, dialogContentWidth),
 	}
-	switch {
-	case d.isSubmitting:
-		lines = append(lines, "", "Deleting…")
-	case d.err != nil:
-		lines = append(lines, "", errorStyle.Render(errorMessage(d.err)))
+	lines = append(lines, statusLines(d.isSubmitting, "Deleting…", d.err, errorMessage)...)
+	lines = append(lines, hintLines(d.deleteHint(), renderHint(keyHint{"esc", "cancel"}))...)
+	return dialogBox(dangerPanelLook, "Delete "+d.name+"?", lines)
+}
+
+// deleteHint reads as a live key once the typed name matches, and as a disabled one until then.
+func (d deleteAppDialog) deleteHint() string {
+	if d.nameMatches() {
+		return errorStyle.Bold(true).Render("⏎") + " " + errorStyle.Render("delete")
 	}
-	lines = append(lines, "", mutedStyle.Render("⏎ delete (once the name matches) · esc cancel"))
-	return renderDialog(colorRed, lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return mutedStyle.Render("⏎ delete (disabled until the name matches)")
 }
 
 // deleteApp treats a 404 as success: the app is already gone, which is what was asked for.

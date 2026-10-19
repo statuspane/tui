@@ -25,6 +25,10 @@ All notable user-facing changes are listed here. The format follows
   components you watch in total and a legend for the markers, and a header that says how many
   changes are unsaved. The question about discarding changes and a failed save show in a red box
   in place of the key bar.
+- The new app, rename and delete dialogs open in the middle of the screen with the screen still
+  visible around them, instead of replacing it. The name field shows how many characters it has,
+  and the delete dialog has a red edge and a delete key that reads as disabled until you have
+  typed the app's name.
 - The TUI now runs in the terminal's alternate screen, so quitting gives you your shell back as
   it was.
 

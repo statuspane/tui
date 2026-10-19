@@ -6,7 +6,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/statuspane/tui/internal/api"
 )
@@ -76,21 +75,10 @@ func (d createAppDialog) handleKey(keyPress tea.KeyPressMsg) (dialog, tea.Cmd) {
 }
 
 func (d createAppDialog) view() string {
-	lines := []string{
-		titleStyle.Render("New app"),
-		"",
-		mutedStyle.Render("Name"),
-		d.input.View(),
-		mutedStyle.Render(nameLengthText(d.input.Value())),
-	}
-	switch {
-	case d.isSubmitting:
-		lines = append(lines, "", "Creating…")
-	case d.err != nil:
-		lines = append(lines, "", errorStyle.Render(fieldErrorMessage(d.err, nameField)))
-	}
-	lines = append(lines, "", mutedStyle.Render("⏎ create · esc cancel"))
-	return renderDialog(colorBlue, lipgloss.JoinVertical(lipgloss.Left, lines...))
+	lines := []string{mutedStyle.Render("Name"), nameBox(d.input), mutedStyle.Render("After creating it you can choose the components to watch.")}
+	lines = append(lines, statusLines(d.isSubmitting, "Creating…", d.err, func(err error) string { return fieldErrorMessage(err, nameField) })...)
+	lines = append(lines, hintLines(renderHint(keyHint{"⏎", "create"}), renderHint(keyHint{"esc", "cancel"}))...)
+	return dialogBox(accentPanelLook, "New app", lines)
 }
 
 func createApp(appCreator AppCreator, name string) tea.Cmd {

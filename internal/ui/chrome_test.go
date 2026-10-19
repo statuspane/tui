@@ -132,3 +132,92 @@ func TestAlertBarIsAFooterShapedBoxWithTheMessageInIt(t *testing.T) {
 		t.Errorf("the edge should be red:\n%q", view)
 	}
 }
+
+// A base and an overlay for the centeredOver tests: the overlay's own text has no 'x' in it.
+const (
+	overlayBaseWidth     = 40
+	overlayBaseHeight    = 9
+	overlayWidth         = 20
+	overlayHeight        = 5
+	overlayBaseCellsText = "x"
+)
+
+func overlayBase() string {
+	line := strings.Repeat(overlayBaseCellsText, overlayBaseWidth)
+	return strings.TrimSuffix(strings.Repeat(line+"\n", overlayBaseHeight), "\n")
+}
+
+func overlayOnBase(t *testing.T) []string {
+	t.Helper()
+	view := centeredOver(overlayBase(), panel("Title", "hello", overlayWidth, overlayHeight), overlayBaseWidth, overlayBaseHeight)
+	return plainLines(t, view)
+}
+
+func TestCenteredOverPutsTheOverlayInTheMiddleVertically(t *testing.T) {
+	lines := overlayOnBase(t)
+
+	top := (overlayBaseHeight - overlayHeight) / 2
+	if !strings.Contains(lines[top], "╭─ Title") || !strings.Contains(lines[top+overlayHeight-1], "╰") {
+		t.Fatalf("the overlay should be on lines %d to %d:\n%s", top, top+overlayHeight-1, strings.Join(lines, "\n"))
+	}
+}
+
+func TestCenteredOverPutsTheOverlayInTheMiddleHorizontally(t *testing.T) {
+	lines := overlayOnBase(t)
+
+	line := lines[(overlayBaseHeight-overlayHeight)/2]
+	if got, want := columnOf(t, line, "╭"), (overlayBaseWidth-overlayWidth)/2; got != want {
+		t.Fatalf("the overlay starts at column %d, want %d:\n%s", got, want, line)
+	}
+}
+
+func TestCenteredOverKeepsTheBaseAroundTheOverlay(t *testing.T) {
+	lines := overlayOnBase(t)
+
+	baseLine := strings.Repeat(overlayBaseCellsText, overlayBaseWidth)
+	if lines[0] != baseLine || lines[overlayBaseHeight-1] != baseLine {
+		t.Fatalf("the lines above and below the overlay should be the base's:\n%s", strings.Join(lines, "\n"))
+	}
+	margin := strings.Repeat(overlayBaseCellsText, (overlayBaseWidth-overlayWidth)/2)
+	for _, line := range lines[(overlayBaseHeight-overlayHeight)/2:][:overlayHeight] {
+		if !strings.HasPrefix(line, margin) || !strings.HasSuffix(line, margin) {
+			t.Fatalf("the base should show on both sides of the overlay: %q", line)
+		}
+	}
+}
+
+func TestCenteredOverCoversTheBaseUnderTheOverlay(t *testing.T) {
+	view := strings.Join(overlayOnBase(t), "\n")
+
+	covered := overlayWidth * overlayHeight
+	if got := strings.Count(view, overlayBaseCellsText); got != overlayBaseWidth*overlayBaseHeight-covered {
+		t.Fatalf("the overlay should replace exactly its own cells, %d of the base are left:\n%s", got, view)
+	}
+}
+
+func TestCenteredOverPutsAnOverlayLargerThanTheWindowAtTheTopLeft(t *testing.T) {
+	view := centeredOver("ab\ncd", panel("Title", "hello", overlayWidth, overlayHeight), 2, 2)
+
+	if !strings.HasPrefix(plain(t, view), "╭") {
+		t.Fatalf("view = %q", view)
+	}
+}
+
+func TestInputBoxHasItsTextAtBothEnds(t *testing.T) {
+	view := plain(t, inputBox("Storefront", "10 / 100", defaultPanelLook, 40))
+
+	assertEveryLineHasWidth(t, view, 40)
+	assertHeightIs(t, view, oneLineBoxHeight)
+	middle := strings.Split(view, "\n")[1]
+	if !strings.Contains(middle, "│  Storefront") || !strings.Contains(middle, "10 / 100  │") {
+		t.Fatalf("middle = %q", middle)
+	}
+}
+
+func TestPanelCutsALongTitleInsteadOfBreakingTheEdge(t *testing.T) {
+	const panelWidth = 24
+	view := panel(strings.Repeat("T", 2*panelWidth), "x", panelWidth, 3)
+
+	assertEveryLineHasWidth(t, view, panelWidth)
+	assertViewContains(t, view, "╭─ TTTT")
+}
