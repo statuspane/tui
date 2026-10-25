@@ -247,10 +247,10 @@ func (m AppsModel) View() tea.View {
 	return tea.NewView(stackedScreen(header, m.body(width, panelHeight), footerBar(appsHints, m.footerTrailing(), width)))
 }
 
-// clockText is the time in UTC and whether the screen is keeping up: "live" while refreshes
+// clockText is the time where the user is, with its zone, and whether the screen is keeping up: "live" while refreshes
 // succeed, and a warning once one fails, since the figures on screen are then getting old.
 func (m AppsModel) clockText() string {
-	text := mutedStyle.Render(m.now().UTC().Format("15:04:05") + " UTC")
+	text := mutedStyle.Render(m.now().Format("15:04:05 MST"))
 	switch {
 	case m.err != nil && m.hasLoaded:
 		return text + mutedStyle.Render(" · ") + errorStyle.Render("not refreshing")

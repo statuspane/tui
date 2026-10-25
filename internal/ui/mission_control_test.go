@@ -322,3 +322,14 @@ func TestTheClockTicksOnAndSaysWhenRefreshesStopped(t *testing.T) {
 	assertViewContains(t, view, "not refreshing")
 	assertViewLacks(t, view, "live")
 }
+
+func TestTheClockShowsTheTimeInTheUsersOwnTimezone(t *testing.T) {
+	m := modelWithDetail(t, degradedAppDetail(), testWidth, testHeight)
+	brasilia := time.FixedZone("BRT", -3*60*60)
+	m.now = func() time.Time { return detailNow.In(brasilia) }
+
+	view := plain(t, m.View().Content)
+
+	assertViewContains(t, view, "09:00:00 BRT")
+	assertViewLacks(t, view, "12:00:00")
+}

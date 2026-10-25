@@ -140,8 +140,9 @@ what doesn't fit; a panel also cuts a title that is too long, such as an app's n
   panel's cut: `factsLine` puts short phrases each on a line when they don't fit one, and
   `progressLine` names only the current step when the four don't fit. Check a new line at
   `fallbackWidth`, where the centre column's content is 40 cells.
-- The header's clock is redrawn by `clockTickMsg` once a second and reads `now`; "live" is only
-  said while the last refresh worked.
+- The header's clock is redrawn by `clockTickMsg` once a second and reads `now`, in the zone `now`
+  carries: the user's, since `time.Now` is local (tests give it a fixed zone). "live" is only said
+  while the last refresh worked.
 
 ## Testing
 
