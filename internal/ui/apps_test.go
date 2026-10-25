@@ -21,10 +21,16 @@ type fakeAppLister struct {
 
 func (f fakeAppLister) ListApps(context.Context) ([]api.App, error) { return f.apps, f.err }
 
+// fakeAppsBackend is what the apps screen takes: the list, and one app's detail for the banner.
+type fakeAppsBackend struct {
+	fakeAppLister
+	fakeAppGetter
+}
+
 func stringPtr(s string) *string { return &s }
 
 func newTestAppsModel(apps ...api.App) AppsModel {
-	return NewAppsModel(fakeAppLister{apps: apps})
+	return NewAppsModel(fakeAppsBackend{fakeAppLister: fakeAppLister{apps: apps}})
 }
 
 func send(m AppsModel, msg tea.Msg) (AppsModel, tea.Cmd) {

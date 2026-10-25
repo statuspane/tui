@@ -87,17 +87,33 @@ func (m AppsModel) centre(width, height int) string {
 	if !ok {
 		return panel("", "", width, height)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, banner(app, width))
+	return lipgloss.JoinVertical(lipgloss.Left, m.banner(app, width))
 }
 
 // banner says in one headline how the app is doing, tinted by its status.
-func banner(app api.App, width int) string {
+func (m AppsModel) banner(app api.App, width int) string {
 	appearance := appearanceOf(app.Status)
 	look := untintedPanelLook(false)
 	if app.Status != nil && *app.Status != "operational" {
 		look = panelLook{border: appearance.style.Faint(true), title: appearance.style.Bold(true)}
 	}
 	body := appearance.style.Bold(true).Render(statusDot+"  "+appearance.headline) + "\n" +
-		mutedStyle.Render(fmt.Sprintf("%d components", app.WatchedComponentsCount))
+		mutedStyle.Render(m.bannerDetail(app))
 	return panelWithLook(look, app.Name, body, width, bannerHeight)
+}
+
+// bannerDetail is how many of the app's components are affected and when it was checked, once the
+// app's detail is in; until then the list's own count of components.
+func (m AppsModel) bannerDetail(app api.App) string {
+	appDetail, hasDetail := m.details[app.Slug]
+	if !hasDetail {
+		return fmt.Sprintf("%d components", app.WatchedComponentsCount)
+	}
+	affected := 0
+	for _, component := range appDetail.WatchedComponents {
+		if component.Status != nil && *component.Status != "operational" {
+			affected++
+		}
+	}
+	return fmt.Sprintf("%d of %d components affected · %s", affected, len(appDetail.WatchedComponents), checkedText(appDetail.LastCheckedAt, m.now()))
 }
