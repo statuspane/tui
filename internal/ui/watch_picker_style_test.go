@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // rawRow is the component row of a view, colour codes included, that shows the text. It reads the
@@ -26,6 +27,11 @@ var (
 	strikethrough = regexp.MustCompile(`\x1b\[(?:\d+;)*9(?:;\d+)*m`)
 	struckSpace   = regexp.MustCompile(`\x1b\[(?:\d+;)*9(?:;\d+)*m \x1b\[m`)
 )
+
+// openingCodes is the escape sequence a style puts in front of the text it renders.
+func openingCodes(style lipgloss.Style) string {
+	return strings.SplitN(style.Render("x"), "x", 2)[0]
+}
 
 func TestEachWatchStateHasItsOwnNameStyle(t *testing.T) {
 	watched, added, removed, unwatched := nameStyleFor(stateWatched), nameStyleFor(stateAdded), nameStyleFor(stateRemoved), nameStyleFor(stateUnwatched)
@@ -61,10 +67,10 @@ func chosenRowsPicker() WatchPickerModel {
 func TestChosenRowsAreStyledAcrossTheNameAndOthersAreNot(t *testing.T) {
 	view := chosenRowsPicker().View().Content
 
-	if !strings.Contains(rawRow(t, view, "API Requests"), "\x1b[32mAPI Requests") {
+	if !strings.Contains(rawRow(t, view, "API Requests"), openingCodes(nameStyleFor(stateWatched))+"API Requests") {
 		t.Error("a watched component should be green across its name")
 	}
-	if !strings.Contains(rawRow(t, view, "Git Operations"), "\x1b[1;34mGit Operations") {
+	if !strings.Contains(rawRow(t, view, "Git Operations"), openingCodes(nameStyleFor(stateAdded))+"Git Operations") {
 		t.Error("an added component should be bold blue across its name")
 	}
 	if !strikethrough.MatchString(rawRow(t, view, "Webhooks")) {

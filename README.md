@@ -44,7 +44,7 @@ in the file, for example to use a local server. Environment variables win over t
 ./statuspane-tui
 ```
 
-The TUI fills the terminal and uses its colours, so it follows your theme. `↑/↓` (or `k`/`j`)
+The TUI fills the terminal and draws in its own dark-theme colours. `↑/↓` (or `k`/`j`)
 move, and `ctrl+c` quits from anywhere. The key bar at the bottom of each screen shows the keys
 that work there.
 

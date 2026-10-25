@@ -28,8 +28,9 @@ set into the top edge), `panelContentSize`, `headerBar`, `footerBar` (key hints 
 don't fit are dropped from the right), `layoutWidth`/`bodyHeight` and `stackedScreen`. `RootModel.View` turns on the alternate
 screen, so a screen lays itself out to the window size it got in `tea.WindowSizeMsg`
 (`fallbackWidth`/`fallbackHeight` until then). Lines are padded before styling and cut with
-`clipTo`, so a frame never wraps. Colours are ANSI indexes (`accentStyle`, `panelBorderStyle`,
-`keyStyle`); don't introduce hex, the terminal's theme decides the shades. A panel's edge and
+`clipTo`, so a frame never wraps. Colours are the design mockups' hex palette (`styles.go`:
+`colorGreen`, `colorEdge`, …), so they don't follow the terminal's theme; take new colours from
+that block, not inline, and look at a light background too. A panel's edge and
 title colours are a `panelLook`; `panel` uses the default one, `panelWithLook` takes another.
 
 The app screen is two panels side by side, each over its own viewport (`incidentsViewport`,
