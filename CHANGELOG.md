@@ -6,6 +6,18 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The apps list is now a Mission control screen: your apps in a sidebar and, beside it, the
+  selected app's status banner (with how many components are affected and when it was checked),
+  its active incident with a progress line, and its affected components, worst first. The header
+  has the time in your timezone and says "live" while refreshes work and "not refreshing" when one fails.
+  Moving through the apps loads the selected one once you stop on it, so scrolling a long list
+  does not use up your API limit. `enter` still opens the app.
+- The TUI draws in its own colours (the design's palette) instead of your terminal theme's, so it
+  looks the same everywhere. The colours are made for a dark background: on a light terminal the
+  panel borders are faint.
+
 ## [0.4.0] - 2026-10-18
 
 A redesigned interface: every screen is framed and fills the terminal, an app's incidents and
