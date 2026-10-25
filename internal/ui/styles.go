@@ -4,6 +4,8 @@ import (
 	"image/color"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/statuspane/tui/internal/api"
 )
 
 // The palette of the design mockups, as fixed hex colours: the terminal's theme does not change
@@ -51,6 +53,16 @@ var impactStyles = map[string]lipgloss.Style{
 	"minor":    lipgloss.NewStyle().Foreground(colorYellow),
 	"major":    lipgloss.NewStyle().Foreground(colorOrange),
 	"critical": lipgloss.NewStyle().Foreground(colorRed),
+}
+
+// impactStyleOf is the colour of an incident's impact, muted when it has none or one we don't know.
+func impactStyleOf(incident api.Incident) lipgloss.Style {
+	if incident.Impact != nil {
+		if style, ok := impactStyles[*incident.Impact]; ok {
+			return style
+		}
+	}
+	return mutedStyle
 }
 
 func markerStyleFor(state watchState) lipgloss.Style {

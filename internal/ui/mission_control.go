@@ -15,10 +15,6 @@ const (
 	sidebarMinWidth     = 28
 	sidebarMaxWidth     = 40
 
-	// A banner is its two lines in a box.
-	bannerLines  = 2
-	bannerHeight = bannerLines + panelChromeHeight
-
 	statusDot     = "●"
 	selectedMark  = "▎"
 	noSelectMark  = " "
@@ -87,7 +83,8 @@ func (m AppsModel) centre(width, height int) string {
 	if !ok {
 		return panel("", "", width, height)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, m.banner(app, width))
+	banner := m.banner(app, width)
+	return lipgloss.JoinVertical(lipgloss.Left, banner, m.incidentPanel(app, width, height-lipgloss.Height(banner)))
 }
 
 // banner says in one headline how the app is doing, tinted by its status.
@@ -97,17 +94,27 @@ func (m AppsModel) banner(app api.App, width int) string {
 	if app.Status != nil && *app.Status != "operational" {
 		look = panelLook{border: appearance.style.Faint(true), title: appearance.style.Bold(true)}
 	}
+	contentWidth, _ := panelContentSize(width, 0)
 	body := appearance.style.Bold(true).Render(statusDot+"  "+appearance.headline) + "\n" +
-		mutedStyle.Render(m.bannerDetail(app))
-	return panelWithLook(look, app.Name, body, width, bannerHeight)
+		mutedStyle.Render(factsLine(m.bannerFacts(app), contentWidth))
+	return panelWithLook(look, app.Name, body, width, lipgloss.Height(body)+panelChromeHeight)
 }
 
-// bannerDetail is how many of the app's components are affected and when it was checked, once the
+// factsLine puts the facts on one line, and each on a line of its own when they do not fit: the
+// facts are short phrases, which read badly when a wrap splits one.
+func factsLine(facts []string, width int) string {
+	if line := strings.Join(facts, " · "); lipgloss.Width(line) <= width {
+		return line
+	}
+	return strings.Join(facts, "\n")
+}
+
+// bannerFacts are how many of the app's components are affected and when it was checked, once the
 // app's detail is in; until then the list's own count of components.
-func (m AppsModel) bannerDetail(app api.App) string {
+func (m AppsModel) bannerFacts(app api.App) []string {
 	appDetail, hasDetail := m.details[app.Slug]
 	if !hasDetail {
-		return fmt.Sprintf("%d components", app.WatchedComponentsCount)
+		return []string{fmt.Sprintf("%d components", app.WatchedComponentsCount)}
 	}
 	affected := 0
 	for _, component := range appDetail.WatchedComponents {
@@ -115,5 +122,5 @@ func (m AppsModel) bannerDetail(app api.App) string {
 			affected++
 		}
 	}
-	return fmt.Sprintf("%d of %d components affected · %s", affected, len(appDetail.WatchedComponents), checkedText(appDetail.LastCheckedAt, m.now()))
+	return []string{fmt.Sprintf("%d of %d components affected", affected, len(appDetail.WatchedComponents)), checkedText(appDetail.LastCheckedAt, m.now())}
 }

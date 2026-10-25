@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -140,4 +141,102 @@ func TestAFailedDetailRequestLeavesTheBannerOnTheListsCount(t *testing.T) {
 	if strings.Contains(view, "boom") || strings.Contains(view, "failed") {
 		t.Errorf("the banner can do without the detail, so a failure is not shown:\n%s", view)
 	}
+}
+
+// modelWithDetail is the screen with one app, "web-app", whose detail has loaded.
+func modelWithDetail(t *testing.T, appDetail api.AppDetail, width, height int) AppsModel {
+	t.Helper()
+	backend := fakeAppsBackend{
+		fakeAppLister: fakeAppLister{apps: []api.App{{Name: "Web App", Slug: "web-app", Status: stringPtr("degraded_performance"), WatchedComponentsCount: 2}}},
+		fakeAppGetter: fakeAppGetter{appDetail: appDetail},
+	}
+	m := NewAppsModel(backend)
+	m.now = func() time.Time { return detailNow }
+	m, _ = send(m, tea.WindowSizeMsg{Width: width, Height: height})
+	return settledApps(m, m.Init())
+}
+
+func TestThePanelShowsTheSelectedAppsIncident(t *testing.T) {
+	m := modelWithDetail(t, degradedAppDetail(), testWidth, testHeight)
+
+	assertViewContains(t, m.View().Content,
+		"Active incident", "Git operations degraded", "github", "started 2h ago",
+		"We are investigating elevated errors.", "Affects ▸ API Requests")
+}
+
+func TestTheProgressLineTicksTheStepsDoneAndMarksTheCurrentOne(t *testing.T) {
+	m := modelWithDetail(t, degradedAppDetail(), testWidth, testHeight)
+
+	line := lineContaining(t, m.View().Content, "Investigating")
+
+	var at []int
+	for _, step := range []string{"✓ Investigating", "● Identified", "○ Monitoring", "○ Resolved"} {
+		index := strings.Index(line, step)
+		if index < 0 {
+			t.Fatalf("the progress line lacks %q: %q", step, line)
+		}
+		at = append(at, index)
+	}
+	if !slices.IsSorted(at) {
+		t.Errorf("the steps are out of order: %q", line)
+	}
+}
+
+func TestWhenTheFourStepsDoNotFitTheProgressLineShowsOnlyTheCurrentOne(t *testing.T) {
+	m := modelWithDetail(t, degradedAppDetail(), fallbackWidth, testHeight)
+
+	view := plain(t, m.View().Content)
+
+	assertEveryLineHasWidth(t, m.View().Content, fallbackWidth)
+	if strings.Contains(view, "Resolved") {
+		t.Fatalf("the steps should not be cut at the panel's edge, but they are shown:\n%s", view)
+	}
+	assertViewContains(t, view, "● Identified · step 2 of 4")
+}
+
+func TestSeveralIncidentsShowTheFirstInFullAndTheRestOnALineEach(t *testing.T) {
+	detail := degradedAppDetail()
+	detail.ActiveIncidents = append(detail.ActiveIncidents, api.Incident{
+		Provider: "cloudflare", Title: "DNS resolution slow", Impact: stringPtr("minor"), Status: stringPtr("monitoring"),
+	})
+	m := modelWithDetail(t, detail, testWidth, testHeight)
+
+	view := plain(t, m.View().Content)
+
+	assertViewContains(t, view, "Active incidents (2)", "Git operations degraded", "We are investigating elevated errors.")
+	line := lineContaining(t, view, "DNS resolution slow")
+	assertViewContains(t, line, "cloudflare", "monitoring")
+}
+
+func TestWithoutIncidentsOrBeforeTheDetailTheIncidentPanelSaysSo(t *testing.T) {
+	quiet := degradedAppDetail()
+	quiet.ActiveIncidents = nil
+
+	assertViewContains(t, modelWithDetail(t, quiet, testWidth, testHeight).View().Content, "No active incidents.")
+
+	loading := NewAppsModel(fakeAppsBackend{fakeAppLister: fakeAppLister{apps: []api.App{{Name: "Web App", Slug: "web-app"}}}})
+	loading, _ = send(loading, tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	loading, _ = send(loading, appsLoadedMsg{apps: []api.App{{Name: "Web App", Slug: "web-app"}}})
+
+	assertViewContains(t, loading.View().Content, "Loading…")
+}
+
+func TestAnIncidentWithoutAStatusHasNoProgressLine(t *testing.T) {
+	detail := degradedAppDetail()
+	detail.ActiveIncidents[0].Status = nil
+	m := modelWithDetail(t, detail, testWidth, testHeight)
+
+	view := plain(t, m.View().Content)
+
+	assertViewContains(t, view, "Git operations degraded")
+	assertViewLacks(t, view, "Investigating", "Identified", "step")
+}
+
+func TestInANarrowWindowTheBannerWrapsInsteadOfCuttingItsSecondLine(t *testing.T) {
+	m := modelWithDetail(t, degradedAppDetail(), fallbackWidth, testHeight)
+
+	view := plain(t, m.View().Content)
+
+	assertViewContains(t, view, "1 of 2 components affected", "checked 3m ago")
+	assertEveryLineHasWidth(t, m.View().Content, fallbackWidth)
 }
