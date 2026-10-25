@@ -298,3 +298,27 @@ func TestTooManyAffectedComponentsAreCutWithACountOfWhatIsLeftOut(t *testing.T) 
 	assertViewContains(t, view, "Part 00", "… and ", " more", "0 operational")
 	assertHeightIs(t, view, 30)
 }
+
+func TestTheHeaderShowsTheTimeInUTCAndThatTheScreenIsLive(t *testing.T) {
+	m := modelWithDetail(t, degradedAppDetail(), testWidth, testHeight)
+
+	assertViewContains(t, m.View().Content, "12:00:00 UTC", "live", "1 degraded")
+}
+
+func TestTheClockTicksOnAndSaysWhenRefreshesStopped(t *testing.T) {
+	m := modelWithDetail(t, degradedAppDetail(), testWidth, testHeight)
+	m.now = func() time.Time { return detailNow.Add(time.Second) }
+
+	m, cmd := send(m, clockTickMsg{})
+
+	if cmd == nil {
+		t.Error("the clock should arm its next tick")
+	}
+	assertViewContains(t, m.View().Content, "12:00:01 UTC")
+
+	m, _ = send(m, appsFailedMsg{err: errors.New("boom")})
+
+	view := plain(t, m.View().Content)
+	assertViewContains(t, view, "not refreshing")
+	assertViewLacks(t, view, "live")
+}

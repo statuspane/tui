@@ -18,6 +18,8 @@ const (
 	// detailSettleDelay is how long the selection has to rest on an app before its detail is
 	// asked for, so moving down a long list does not spend the API's request limit.
 	detailSettleDelay = 300 * time.Millisecond
+	// clockInterval is how often the header's clock is redrawn.
+	clockInterval = time.Second
 
 	selectionMarker   = "▸ "
 	noSelectionMarker = "  "
@@ -38,6 +40,13 @@ type AppLister interface {
 type AppsBackend interface {
 	AppLister
 	AppGetter
+}
+
+// clockTickMsg redraws the header's clock; each one arms the next.
+type clockTickMsg struct{}
+
+func clockTick() tea.Cmd {
+	return tea.Tick(clockInterval, func(time.Time) tea.Msg { return clockTickMsg{} })
 }
 
 // detailSettledMsg says the selection stayed put for detailSettleDelay. Its sequence number tells a
@@ -85,7 +94,7 @@ func NewAppsModel(backend AppsBackend) AppsModel {
 }
 
 func (m AppsModel) Init() tea.Cmd {
-	return m.fetchCmd()
+	return tea.Batch(m.fetchCmd(), clockTick())
 }
 
 func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -106,6 +115,9 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedIndex = min(m.selectedIndex, max(len(m.apps)-1, 0))
 		next, cmd := m.reloadOrScheduleRefresh()
 		return next, tea.Batch(cmd, next.(AppsModel).fetchSelectedDetailCmd())
+
+	case clockTickMsg:
+		return m, clockTick()
 
 	case detailSettledMsg:
 		if msg.sequence != m.detailSequence {
@@ -231,8 +243,21 @@ func (m AppsModel) scheduleRefresh() (tea.Model, tea.Cmd) {
 func (m AppsModel) View() tea.View {
 	screenWidth, screenHeight := m.windowSize()
 	width, panelHeight := layoutWidth(screenWidth), bodyHeight(screenHeight)
-	header := headerBar(accentStyle.Render(brandText), statusSummary(m.apps), width)
+	header := headerBar(accentStyle.Render(brandText)+summaryGap+statusSummary(m.apps), m.clockText(), width)
 	return tea.NewView(stackedScreen(header, m.body(width, panelHeight), footerBar(appsHints, m.footerTrailing(), width)))
+}
+
+// clockText is the time in UTC and whether the screen is keeping up: "live" while refreshes
+// succeed, and a warning once one fails, since the figures on screen are then getting old.
+func (m AppsModel) clockText() string {
+	text := mutedStyle.Render(m.now().UTC().Format("15:04:05") + " UTC")
+	switch {
+	case m.err != nil && m.hasLoaded:
+		return text + mutedStyle.Render(" · ") + errorStyle.Render("not refreshing")
+	case m.hasLoaded:
+		return text + mutedStyle.Render(" · ") + watchedStyle.Render("live")
+	}
+	return text
 }
 
 func (m AppsModel) windowSize() (width, height int) {
