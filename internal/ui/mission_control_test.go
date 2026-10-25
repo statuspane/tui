@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -239,4 +240,61 @@ func TestInANarrowWindowTheBannerWrapsInsteadOfCuttingItsSecondLine(t *testing.T
 
 	assertViewContains(t, view, "1 of 2 components affected", "checked 3m ago")
 	assertEveryLineHasWidth(t, m.View().Content, fallbackWidth)
+}
+
+func TestTheComponentsPanelListsWhatIsNotOperationalAndCountsTheRest(t *testing.T) {
+	m := modelWithDetail(t, degradedAppDetail(), testWidth, testHeight)
+
+	view := plain(t, m.View().Content)
+
+	assertViewContains(t, view, "Affected components", "github / API Requests", "Degraded", "1 operational")
+	if strings.Contains(view, "github / Pages") {
+		t.Errorf("an operational component is counted, not listed:\n%s", view)
+	}
+}
+
+func componentWithStatus(name, status string) api.Component {
+	return api.Component{
+		ComponentReference: api.ComponentReference{Provider: "github", ID: name, Name: name},
+		Status:             stringPtr(status),
+	}
+}
+
+func TestTheWorstComponentsComeFirst(t *testing.T) {
+	detail := degradedAppDetail()
+	detail.WatchedComponents = []api.Component{
+		componentWithStatus("Webhooks", "degraded_performance"),
+		componentWithStatus("Git Operations", "major_outage"),
+		componentWithStatus("Pages", "partial_outage"),
+	}
+	m := modelWithDetail(t, detail, testWidth, testHeight)
+
+	view := plain(t, m.View().Content)
+
+	major, partial, degraded := strings.Index(view, "Git Operations"), strings.Index(view, "Pages"), strings.Index(view, "Webhooks")
+	if major < 0 || major > partial || partial > degraded {
+		t.Errorf("want major, partial, then degraded outage:\n%s", view)
+	}
+}
+
+func TestWhenNothingIsAffectedThereIsNoComponentsPanel(t *testing.T) {
+	detail := degradedAppDetail()
+	detail.WatchedComponents = []api.Component{componentWithStatus("Pages", "operational")}
+	m := modelWithDetail(t, detail, testWidth, testHeight)
+
+	assertViewLacks(t, plain(t, m.View().Content), "Affected components")
+}
+
+func TestTooManyAffectedComponentsAreCutWithACountOfWhatIsLeftOut(t *testing.T) {
+	detail := degradedAppDetail()
+	detail.WatchedComponents = nil
+	for index := range 12 {
+		detail.WatchedComponents = append(detail.WatchedComponents, componentWithStatus(fmt.Sprintf("Part %02d", index), "degraded_performance"))
+	}
+	m := modelWithDetail(t, detail, testWidth, 30)
+
+	view := m.View().Content
+
+	assertViewContains(t, view, "Part 00", "… and ", " more", "0 operational")
+	assertHeightIs(t, view, 30)
 }

@@ -84,7 +84,12 @@ func (m AppsModel) centre(width, height int) string {
 		return panel("", "", width, height)
 	}
 	banner := m.banner(app, width)
-	return lipgloss.JoinVertical(lipgloss.Left, banner, m.incidentPanel(app, width, height-lipgloss.Height(banner)))
+	incident := m.incidentPanel(app, width, height-lipgloss.Height(banner))
+	panels := []string{banner, incident}
+	if affected := m.affectedPanel(app, width, height-lipgloss.Height(banner)-lipgloss.Height(incident)); affected != "" {
+		panels = append(panels, affected)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, panels...)
 }
 
 // banner says in one headline how the app is doing, tinted by its status.
