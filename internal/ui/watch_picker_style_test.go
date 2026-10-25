@@ -61,10 +61,10 @@ func chosenRowsPicker() WatchPickerModel {
 func TestChosenRowsAreStyledAcrossTheNameAndOthersAreNot(t *testing.T) {
 	view := chosenRowsPicker().View().Content
 
-	if !strings.Contains(rawRow(t, view, "API Requests"), "\x1b[32mAPI Requests") {
+	if !strings.Contains(rawRow(t, view, "API Requests"), escapeBefore(nameStyleFor(stateWatched).Render("x"))+"API Requests") {
 		t.Error("a watched component should be green across its name")
 	}
-	if !strings.Contains(rawRow(t, view, "Git Operations"), "\x1b[1;34mGit Operations") {
+	if !strings.Contains(rawRow(t, view, "Git Operations"), escapeBefore(nameStyleFor(stateAdded).Render("x"))+"Git Operations") {
 		t.Error("an added component should be bold blue across its name")
 	}
 	if !strikethrough.MatchString(rawRow(t, view, "Webhooks")) {

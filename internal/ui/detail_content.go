@@ -59,15 +59,22 @@ func checkedText(lastCheckedAt *time.Time, now time.Time) string {
 	return "checked " + ageText(now, *lastCheckedAt)
 }
 
-func renderIncident(incident api.Incident, now time.Time) string {
-	impact := noImpactLabel
-	impactStyle := mutedStyle
+// impactStyleOf is the colour of an incident's impact, muted when it has none or one we don't know.
+func impactStyleOf(incident api.Incident) lipgloss.Style {
 	if incident.Impact != nil {
-		impact = *incident.Impact
-		if style, ok := impactStyles[impact]; ok {
-			impactStyle = style
+		if style, ok := impactStyles[*incident.Impact]; ok {
+			return style
 		}
 	}
+	return mutedStyle
+}
+
+func renderIncident(incident api.Incident, now time.Time) string {
+	impact := noImpactLabel
+	if incident.Impact != nil {
+		impact = *incident.Impact
+	}
+	impactStyle := impactStyleOf(incident)
 
 	details := []string{impact}
 	if incident.Status != nil {

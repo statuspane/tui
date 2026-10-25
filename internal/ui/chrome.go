@@ -200,6 +200,11 @@ func clipTo(line string, width int) string {
 	return lipgloss.NewStyle().MaxWidth(width).Render(line)
 }
 
+// wrapText breaks text into lines of at most width cells.
+func wrapText(text string, width int) string {
+	return lipgloss.NewStyle().Width(width).Render(text)
+}
+
 func padRight(text string, width int) string {
 	return text + strings.Repeat(" ", max(width-lipgloss.Width(text), 0))
 }

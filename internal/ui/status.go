@@ -22,6 +22,15 @@ var statusAppearances = map[string]statusAppearance{
 	"major_outage":         {"Major outage", lipgloss.NewStyle().Foreground(colorRed)},
 }
 
+// statusOperational is the status of something with nothing wrong.
+const statusOperational = "operational"
+
+// isAffected is whether something has a known status that is not operational. A status that is not
+// there yet means no check has run, which is neither.
+func isAffected(status *string) bool {
+	return status != nil && *status != statusOperational
+}
+
 // appearanceOf shows a status this client doesn't know as it is, unstyled.
 func appearanceOf(status *string) statusAppearance {
 	if status == nil {

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -157,3 +158,30 @@ const (
 	testRootWidth  = 100
 	testRootHeight = 30
 )
+
+// drainCommands feeds a model the answers to its commands. The spinner's ticks are left out (each
+// starts the next), and so are the timers, which collectMessages does not wait for.
+func drainCommands(m AppsModel, cmd tea.Cmd) AppsModel {
+	for _, msg := range collectMessages(cmd) {
+		if _, isSpinnerTick := msg.(spinner.TickMsg); isSpinnerTick {
+			continue
+		}
+		var next tea.Cmd
+		m, next = send(m, msg)
+		m = drainCommands(m, next)
+	}
+	return m
+}
+
+// modelWithDetail is the screen with one app, "web-app", whose detail has loaded.
+func modelWithDetail(t *testing.T, appDetail api.AppDetail, width, height int) AppsModel {
+	t.Helper()
+	backend := fakeAppsBackend{
+		fakeAppLister: fakeAppLister{apps: []api.App{{Name: "Web App", Slug: "web-app", Status: stringPtr("degraded_performance"), WatchedComponentsCount: 2}}},
+		fakeAppGetter: fakeAppGetter{appDetail: appDetail},
+	}
+	m := NewAppsModel(backend)
+	m.now = func() time.Time { return detailNow }
+	m, _ = send(m, tea.WindowSizeMsg{Width: width, Height: height})
+	return drainCommands(m, m.Init())
+}

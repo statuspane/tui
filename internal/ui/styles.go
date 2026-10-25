@@ -6,14 +6,17 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// ANSI palette indexes, so the terminal's own theme decides the exact shades.
+// The palette of the design mockups, as fixed hex colours: the terminal's theme does not change
+// them, so check a new colour on a dark and a light background.
 var (
-	colorRed    = lipgloss.Color("1")
-	colorGreen  = lipgloss.Color("2")
-	colorYellow = lipgloss.Color("3")
-	colorBlue   = lipgloss.Color("4")
-	colorOrange = lipgloss.Color("208")
-	colorMuted  = lipgloss.Color("8")
+	colorRed    = lipgloss.Color("#ff6b81")
+	colorGreen  = lipgloss.Color("#7ee787")
+	colorYellow = lipgloss.Color("#e3b341")
+	colorBlue   = lipgloss.Color("#7aa2f7")
+	colorOrange = lipgloss.Color("#ff9e64")
+	colorMuted  = lipgloss.Color("#8089a8")
+	// colorEdge is the line of a panel's border: quieter than the muted text.
+	colorEdge = lipgloss.Color("#2a2f45")
 )
 
 var (
@@ -29,7 +32,7 @@ var (
 
 	// Roles of the shared screen chrome: panel edges and titles, and the keys in the footer.
 	accentStyle      = lipgloss.NewStyle().Bold(true).Foreground(colorBlue)
-	panelBorderStyle = lipgloss.NewStyle().Foreground(colorMuted)
+	panelBorderStyle = lipgloss.NewStyle().Foreground(colorEdge)
 	keyStyle         = lipgloss.NewStyle().Bold(true)
 
 	// cursorRowStyle is the bar across the row under the cursor; reverse video works on any theme.

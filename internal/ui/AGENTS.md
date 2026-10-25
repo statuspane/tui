@@ -1,7 +1,7 @@
 # internal/ui
 
-Bubble Tea v2 screens: `RootModel` (which screen is showing) → `AppsModel` (list) and
-`AppDetailModel` (one app), `WatchPickerModel` (choose an app's components) on top of the
+Bubble Tea v2 screens: `RootModel` (which screen is showing) → `AppsModel` (the Mission control
+screen: a sidebar of apps and what the selected one is doing) and `AppDetailModel` (one app), `WatchPickerModel` (choose an app's components) on top of the
 detail, or a dialog (`createAppDialog`, `deleteAppDialog`) drawn over any of them.
 
 ## Patterns
@@ -14,7 +14,7 @@ detail, or a dialog (`createAppDialog`, `deleteAppDialog`) drawn over any of the
   and `RootModel` reacts. Key presses go to the visible screen only; other messages go to both
   and each ignores what isn't its own.
 - Screens accept small interfaces (`AppLister`, `AppGetter`, `AppCreator`, `AppDeleter`) so
-  tests pass fakes; `Backend` is their union, which `*api.Client` satisfies.
+  tests pass fakes (`AppsBackend` is the apps screen's: the list and one app's detail); `Backend` is their union, which `*api.Client` satisfies.
 - A dialog implements `dialog` (`update`, `view`) and is owned by `RootModel`, because it can open
   over either screen. A screen asks for one with a message (`openCreateAppDialogMsg`,
   `openDeleteAppDialogMsg`); the dialog answers with `appCreatedMsg`, `appDeletedMsg` or
@@ -28,9 +28,18 @@ set into the top edge), `panelContentSize`, `headerBar`, `footerBar` (key hints 
 don't fit are dropped from the right), `layoutWidth`/`bodyHeight` and `stackedScreen`. `RootModel.View` turns on the alternate
 screen, so a screen lays itself out to the window size it got in `tea.WindowSizeMsg`
 (`fallbackWidth`/`fallbackHeight` until then). Lines are padded before styling and cut with
-`clipTo`, so a frame never wraps. Colours are ANSI indexes (`accentStyle`, `panelBorderStyle`,
-`keyStyle`); don't introduce hex, the terminal's theme decides the shades. A panel's edge and
+`clipTo`, so a frame never wraps. Colours are the design mockups' hex palette (`styles.go`:
+`colorGreen`, `colorEdge`, …), so they don't follow the terminal's theme; take new colours from
+that block, not inline, and look at a light background too. A panel's edge and
 title colours are a `panelLook`; `panel` uses the default one, `panelWithLook` takes another.
+
+The apps screen (`AppsModel`, laid out in `mission_control.go`) is a sidebar panel of apps (a status
+dot and a name; the selected row is tinted) and, beside it, the selected app's panels stacked:
+`banner` (status headline and facts), `incidentPanel` (`mission_incident.go`) and `affectedPanel`
+(`mission_components.go`). Each is as tall as its content needs, and what is left of the column is
+empty. The loading, error and empty states are one full-width "Apps" panel instead, because
+the sidebar is too narrow for a message. The header counts the apps in each status and shows the
+clock at the right.
 
 The app screen is two panels side by side, each over its own viewport (`incidentsViewport`,
 `componentsViewport`); `focus` says which one `↑/↓/pgup/pgdn` scroll and `tab` toggles it. The
@@ -119,7 +128,28 @@ what doesn't fit; a panel also cuts a title that is too long, such as an app's n
 - Don't read the real clock in rendering code; the detail model holds `now` so tests can fix it.
 - `refreshInterval` and `fetchTimeout` are named constants; keep durations out of call sites.
 
+- The apps screen shows the selected app's detail (the banner's counts, the incident, the affected
+  components), and `selectedDetail` (`selected_detail.go`) owns it: the details that have arrived,
+  by slug, and a count of moves that tells a pause that another move interrupted from the last one.
+  The screen asks for the detail when the apps load (every refresh too) and, after a move, only
+  once the selection has rested for `detailSettleDelay`. The API allows 60 requests a minute per
+  key; never fetch per move. Going back to an app shows its detail at once, and a failure is
+  silent: the banner falls back to the list's own count of components. The answer is
+  `selectedDetailLoadedMsg`, not `appDetailLoadedMsg`: the root sends every non-key message to
+  both screens and the app screen would take the other one for its own.
+- Text in a panel that is narrower than its text is wrapped or shortened by us, never left to the
+  panel's cut: `factsLine` puts short phrases each on a line when they don't fit one, and
+  `progressLine` names only the current step when the four don't fit. Check a new line at
+  `fallbackWidth`, where the centre column's content is 40 cells.
+- The header's clock (`mission_clock.go`) is redrawn by `clockTickMsg` once a second and reads
+  `now`, in the zone `now` carries: the user's, since `time.Now` is local (tests give it a fixed
+  zone). "live" is only said while the last refresh worked.
+
 ## Testing
 
 Drive `Update` with messages and assert on `View().Content`: no terminal, no goroutines.
 Substring checks survive styling because escape codes wrap, not split, the text.
+`drainCommands` (in `testhelpers_test.go`) feeds the apps screen the answers to its commands,
+leaving out the spinner's ticks, which re-arm forever. A timer (`tea.Tick`) is not waited for:
+`collectMessages` gives each command `commandWait` and moves on, so a test sends the timer's
+message itself (`detailSettledMsg{sequence: m.selectedDetail.sequence}`).

@@ -44,13 +44,18 @@ in the file, for example to use a local server. Environment variables win over t
 ./statuspane-tui
 ```
 
-The TUI fills the terminal and uses its colours, so it follows your theme. `↑/↓` (or `k`/`j`)
+The TUI fills the terminal and draws in its own dark-theme colours. `↑/↓` (or `k`/`j`)
 move, and `ctrl+c` quits from anywhere. The key bar at the bottom of each screen shows the keys
 that work there.
 
-**Apps list.** The header counts your apps in each status. `enter` opens the selected app, `n`
-creates an app, `e` renames the selected one, `d` deletes it (you type its name to confirm), `r`
-refreshes, and `q` quits. The list refreshes itself every 30 seconds.
+**Apps.** Your apps are in a sidebar on the left, each with a dot in its status colour, and the
+selected one is explained on the right: a banner with its status and how many of its components are
+affected, its active incident with a progress line (investigating, identified, monitoring,
+resolved), and the components that are not operational, the worst first. The header counts your
+apps in each status and shows the time in your timezone, with "live" while the screen is refreshing and "not
+refreshing" once a refresh fails. `↑/↓` change the selected app (its details load once you stop on
+it), `enter` opens it, `n` creates an app, `e` renames the selected one, `d` deletes it (you type its
+name to confirm), `r` refreshes, and `q` quits. Everything refreshes itself every 30 seconds.
 
 **An app's screen.** Its watched components are on the left, its active incidents on the right.
 `tab` moves the focus between the two panes; `↑/↓` and page up/down scroll the one that has it,
