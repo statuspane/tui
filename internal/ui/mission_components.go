@@ -28,15 +28,26 @@ func (m AppsModel) affectedPanel(app api.App, width, maxHeight int) string {
 		return ""
 	}
 
+	shown, leftOut := rowsThatFit(affected, rowRoom)
 	lines := make([]string, 0, contentHeight)
-	for _, component := range affected[:min(len(affected), rowRoom)] {
+	for _, component := range shown {
 		lines = append(lines, affectedRow(component, contentWidth))
 	}
-	if hidden := len(affected) - rowRoom; hidden > 0 {
-		lines[len(lines)-1] = mutedStyle.Render(fmt.Sprintf("… and %d more", hidden+1))
+	if leftOut > 0 {
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("… and %d more", leftOut)))
 	}
 	lines = append(lines, mutedStyle.Render(fmt.Sprintf("%d operational", operationalCount)))
 	return panel(affectedPanelTitle, strings.Join(lines, "\n"), width, len(lines)+panelChromeHeight)
+}
+
+// rowsThatFit is the components that get a row when only rowRoom rows are free, and how many are
+// left out. When some are, the last free row says so, so one fewer component is shown.
+func rowsThatFit(affected []api.Component, rowRoom int) (shown []api.Component, leftOut int) {
+	if len(affected) <= rowRoom {
+		return affected, 0
+	}
+	shown = affected[:rowRoom-1]
+	return shown, len(affected) - len(shown)
 }
 
 // affectedComponents are the components whose status is known and not operational, worst first and

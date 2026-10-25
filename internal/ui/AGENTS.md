@@ -149,7 +149,7 @@ what doesn't fit; a panel also cuts a title that is too long, such as an app's n
 
 Drive `Update` with messages and assert on `View().Content`: no terminal, no goroutines.
 Substring checks survive styling because escape codes wrap, not split, the text.
-`settledApps` (in `mission_control_test.go`) feeds the apps screen the answers to its commands,
+`drainCommands` (in `testhelpers_test.go`) feeds the apps screen the answers to its commands,
 leaving out the spinner's ticks, which re-arm forever. A timer (`tea.Tick`) is not waited for:
 `collectMessages` gives each command `commandWait` and moves on, so a test sends the timer's
 message itself (`detailSettledMsg{sequence: m.selectedDetail.sequence}`).

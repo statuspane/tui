@@ -44,16 +44,15 @@ func headlineOf(status *string) string {
 	return strings.ToUpper(*status)
 }
 
-// body is the sidebar of apps and, beside it, what the selected app is doing.
-func (m AppsModel) body(width, height int) string {
+// missionControl is the sidebar of apps and, beside it, what the selected app is doing.
+func (m AppsModel) missionControl(width, height int) string {
 	if !m.hasLoaded || len(m.apps) == 0 {
-		contentWidth, contentHeight := panelContentSize(width, height)
-		return panel(appsPanelName, m.sidebarBody(contentWidth, contentHeight), width, height)
+		return m.sidebar(width, height)
 	}
 	sidebarWidth := min(max(width/sidebarShareOfWidth, sidebarMinWidth), sidebarMaxWidth)
 	centreWidth := width - sidebarWidth - panelGapWidth
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		m.sidebar(sidebarWidth, height), strings.Repeat(" ", panelGapWidth), m.centre(centreWidth, height))
+		m.sidebar(sidebarWidth, height), strings.Repeat(" ", panelGapWidth), m.selectedAppPanels(centreWidth, height))
 }
 
 func (m AppsModel) sidebar(width, height int) string {
@@ -75,7 +74,7 @@ func (m AppsModel) sidebarBody(contentWidth, lineCount int) string {
 
 	var noticeLines []string
 	if notice := m.refreshNotice(); notice != "" {
-		noticeLines = strings.Split(lipgloss.NewStyle().Width(contentWidth).Render(notice), "\n")
+		noticeLines = strings.Split(wrapText(notice, contentWidth), "\n")
 	}
 	start, end := visibleRange(len(m.apps), m.selectedIndex, max(lineCount-len(noticeLines), 0))
 	lines := make([]string, 0, lineCount)
@@ -95,13 +94,14 @@ func (m AppsModel) sidebarRow(appIndex, contentWidth int) string {
 	}
 
 	tint := rowTintColor(m.hasDarkBackground)
-	tinted := lipgloss.NewStyle().Background(tint)
-	row := accentStyle.Background(tint).Render(sidebarSelectedMark) + dotStyle.Background(tint).Render(statusDot) + tinted.Render(" ") +
-		tinted.Bold(true).Render(clipTo(app.Name, contentWidth-lipgloss.Width(sidebarSelectedMark+statusDot+" ")))
-	return row + tinted.Render(strings.Repeat(" ", max(contentWidth-lipgloss.Width(row), 0)))
+	selectedRowStyle := lipgloss.NewStyle().Background(tint)
+	row := accentStyle.Background(tint).Render(sidebarSelectedMark) + dotStyle.Background(tint).Render(statusDot) + selectedRowStyle.Render(" ") +
+		selectedRowStyle.Bold(true).Render(clipTo(app.Name, contentWidth-lipgloss.Width(sidebarSelectedMark+statusDot+" ")))
+	return row + selectedRowStyle.Render(strings.Repeat(" ", max(contentWidth-lipgloss.Width(row), 0)))
 }
 
-func (m AppsModel) centre(width, height int) string {
+// selectedAppPanels are the selected app's banner, incident and affected components, stacked.
+func (m AppsModel) selectedAppPanels(width, height int) string {
 	app, ok := m.selectedApp()
 	if !ok {
 		return panel("", "", width, height)

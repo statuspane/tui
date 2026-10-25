@@ -69,7 +69,7 @@ func NewAppsModel(backend AppsBackend) AppsModel {
 }
 
 func (m AppsModel) Init() tea.Cmd {
-	return tea.Batch(m.fetchCmd(), clockTick())
+	return tea.Batch(m.fetchCmd(), clockTickCmd())
 }
 
 func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -92,7 +92,7 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return next, tea.Batch(cmd, m.fetchSelectedDetailCmd())
 
 	case clockTickMsg:
-		return m, clockTick()
+		return m, clockTickCmd()
 
 	case detailSettledMsg:
 		if !m.selectedDetail.hasRested(msg) {
@@ -219,7 +219,7 @@ func (m AppsModel) View() tea.View {
 	screenWidth, screenHeight := m.windowSize()
 	width, panelHeight := layoutWidth(screenWidth), bodyHeight(screenHeight)
 	header := headerBar(accentStyle.Render(brandText)+summaryGap+statusSummary(m.apps), m.clockText(), width)
-	return tea.NewView(stackedScreen(header, m.body(width, panelHeight), footerBar(appsHints, m.footerTrailing(), width)))
+	return tea.NewView(stackedScreen(header, m.missionControl(width, panelHeight), footerBar(appsHints, m.footerTrailing(), width)))
 }
 
 func (m AppsModel) windowSize() (width, height int) {

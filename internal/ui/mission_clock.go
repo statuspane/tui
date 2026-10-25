@@ -12,7 +12,7 @@ const clockInterval = time.Second
 // clockTickMsg redraws the header's clock; each one arms the next.
 type clockTickMsg struct{}
 
-func clockTick() tea.Cmd {
+func clockTickCmd() tea.Cmd {
 	return tea.Tick(clockInterval, func(time.Time) tea.Msg { return clockTickMsg{} })
 }
 

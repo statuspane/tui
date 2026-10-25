@@ -60,11 +60,11 @@ func otherIncidentLines(incidents []api.Incident, contentWidth int) string {
 	lines := make([]string, len(incidents))
 	for index, incident := range incidents {
 		impactStyle := impactStyleOf(incident)
-		where := incident.Provider
+		providerAndStage := incident.Provider
 		if incident.Status != nil {
-			where += " · " + *incident.Status
+			providerAndStage += " · " + *incident.Status
 		}
-		lines[index] = headerBar(impactStyle.Render(statusDot)+" "+incident.Title, mutedStyle.Render(where), contentWidth)
+		lines[index] = headerBar(impactStyle.Render(statusDot)+" "+incident.Title, mutedStyle.Render(providerAndStage), contentWidth)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -73,31 +73,26 @@ func otherIncidentLines(incidents []api.Incident, contentWidth int) string {
 // said about it, and the components it touches.
 func incidentPanelBody(incident api.Incident, now time.Time, contentWidth int) string {
 	impactStyle := impactStyleOf(incident)
-	where := incident.Provider
+	providerAndAge := incident.Provider
 	if incident.StartedAt != nil {
-		where += " · started " + ageText(now, *incident.StartedAt)
+		providerAndAge += " · started " + ageText(now, *incident.StartedAt)
 	}
-	sections := []string{headerBar(impactStyle.Render(statusDot)+" "+titleStyle.Render(incident.Title), mutedStyle.Render(where), contentWidth)}
+	sections := []string{headerBar(impactStyle.Render(statusDot)+" "+titleStyle.Render(incident.Title), mutedStyle.Render(providerAndAge), contentWidth)}
 	if progress := progressLine(incident.Status, impactStyle, contentWidth); progress != "" {
 		sections = append(sections, progress)
 	}
 
 	if incident.LatestUpdate != nil && incident.LatestUpdate.Body != "" {
-		sections = append(sections, wrappedTo("“"+incident.LatestUpdate.Body+"”", contentWidth))
+		sections = append(sections, wrapText("“"+incident.LatestUpdate.Body+"”", contentWidth))
 	}
 	if len(incident.AffectedComponents) > 0 {
 		names := make([]string, len(incident.AffectedComponents))
 		for index, component := range incident.AffectedComponents {
 			names[index] = component.Name
 		}
-		sections = append(sections, mutedStyle.Render(wrappedTo(fmt.Sprintf("Affects ▸ %s", strings.Join(names, " · ")), contentWidth)))
+		sections = append(sections, mutedStyle.Render(wrapText(fmt.Sprintf("Affects ▸ %s", strings.Join(names, " · ")), contentWidth)))
 	}
 	return strings.Join(sections, "\n\n")
-}
-
-// wrappedTo breaks text into lines of at most width cells.
-func wrappedTo(text string, width int) string {
-	return lipgloss.NewStyle().Width(width).Render(text)
 }
 
 // progressLine is the incident's steps with a connector between each: a tick and a solid line for
