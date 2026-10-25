@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -58,12 +57,11 @@ func TestLoadedAppsShowNamesStatusesAndNullAsPending(t *testing.T) {
 		{Name: "Fresh", Slug: "fresh", Status: nil},
 	}})
 
-	view := m.View().Content
-	for _, want := range []string{"Web App", "Degraded", "3 components", "Fresh", "Pending"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("view missing %q:\n%s", want, view)
-		}
-	}
+	assertViewContains(t, m.View().Content, "Web App", "Fresh", "DEGRADED PERFORMANCE", "3 components")
+
+	m = pressRune(m, 'j')
+
+	assertViewContains(t, m.View().Content, "NOT CHECKED YET")
 }
 
 func TestEmptyOrganizationSaysSo(t *testing.T) {
@@ -100,9 +98,7 @@ func TestFailedRefreshKeepsPreviousApps(t *testing.T) {
 	m, _ = send(m, appsFailedMsg{err: errors.New("connection refused")})
 
 	view := m.View().Content
-	if !strings.Contains(view, "Web App") || !strings.Contains(view, "Refresh failed: connection refused") {
-		t.Fatalf("view = %q", view)
-	}
+	assertViewContains(t, view, "Web App", "Refresh failed:", "connection", "refused")
 }
 
 func TestCursorMovesAndStaysWithinList(t *testing.T) {
@@ -198,31 +194,6 @@ func TestRateLimitUnderOneSecondReadsAsOneSecond(t *testing.T) {
 	}
 }
 
-func TestStatusColumnsAlignWhenStyled(t *testing.T) {
-	m := newTestAppsModel()
-	m, _ = send(m, appsLoadedMsg{apps: []api.App{
-		{Name: "Alpha", Status: stringPtr("operational"), WatchedComponentsCount: 1},
-		{Name: "Bravo", Status: stringPtr("partial_outage"), WatchedComponentsCount: 1},
-		{Name: "Delta", Status: nil, WatchedComponentsCount: 1},
-	}})
-
-	var columns []int
-	for _, line := range m.listLines(76, 10) {
-		text := plain(t, line)
-		if index := strings.Index(text, " component"); index >= 0 {
-			columns = append(columns, lipgloss.Width(text[:index]))
-		}
-	}
-	if len(columns) != 3 {
-		t.Fatalf("want 3 rows with a component count, got %v", columns)
-	}
-	for _, column := range columns {
-		if column != columns[0] {
-			t.Fatalf("component columns differ: %v", columns)
-		}
-	}
-}
-
 func sizedAppsModel(width, height int, apps ...api.App) AppsModel {
 	m := newTestAppsModel()
 	m, _ = send(m, tea.WindowSizeMsg{Width: width, Height: height})
@@ -234,7 +205,7 @@ func TestAppsScreenIsFramedAndFillsTheWindow(t *testing.T) {
 	m := sizedAppsModel(100, 30, api.App{Name: "Web App", Status: stringPtr("operational")})
 
 	view := m.View().Content
-	assertViewContains(t, view, "◉ STATUSPANE", "╭─ Apps ─", "NAME", "STATUS", "WATCHING", "refreshes every 30s", "q quit")
+	assertViewContains(t, view, "◉ STATUSPANE", "╭─ Apps ─", "refreshes every 30s", "q quit")
 	assertEveryLineHasWidth(t, view, 100)
 	assertHeightIs(t, view, 30)
 }
@@ -262,7 +233,7 @@ func TestSelectedAppIsMarkedAndTheOthersAreNot(t *testing.T) {
 	m = pressRune(m, 'j')
 
 	view := plain(t, m.View().Content)
-	if !strings.Contains(view, "▸ Second") || strings.Contains(view, "▸ First") {
+	if !strings.Contains(view, "▎● Second") || strings.Contains(view, "▎● First") {
 		t.Fatalf("view = %s", view)
 	}
 }
@@ -294,7 +265,8 @@ func TestRefreshStatusSitsInsideThePanelUnderTheList(t *testing.T) {
 	m, _ = send(m, appsFailedMsg{err: errors.New("connection refused")})
 
 	view := m.View().Content
-	assertViewContains(t, view, "Web App", "Refresh failed: connection refused")
+	// The notice wraps to the sidebar's width, so it is read word by word.
+	assertViewContains(t, view, "Web App", "Refresh failed:", "connection", "refused")
 	assertEveryLineHasWidth(t, view, 100)
 }
 
@@ -309,7 +281,7 @@ func TestLongListScrollsToKeepTheSelectedAppInView(t *testing.T) {
 	}
 
 	view := m.View().Content
-	assertViewContains(t, view, "▸ App 30")
+	assertViewContains(t, view, "▎● App 30")
 	assertViewLacks(t, view, "App 00")
 	assertHeightIs(t, view, 16)
 }
@@ -411,35 +383,10 @@ func TestAppsChangedDuringALoadReloadsRightAfterIt(t *testing.T) {
 	}
 }
 
-func TestColumnHeaderHasARuleUnderIt(t *testing.T) {
-	m := sizedAppsModel(100, 30, api.App{Name: "Web App"})
-
-	contentWidth, _ := panelContentSize(layoutWidth(100), bodyHeight(30))
-	padding := strings.Repeat(" ", panelPadding)
-	assertViewContains(t, m.View().Content, "│"+padding+strings.Repeat("─", contentWidth)+padding+"│")
-}
-
-func TestWatchingColumnEndsAtTheRowPaddingFromThePanelContent(t *testing.T) {
-	m := sizedAppsModel(100, 30, api.App{Name: "Web App", Status: stringPtr("operational"), WatchedComponentsCount: 3})
-
-	var columns []int
-	for _, line := range strings.Split(plain(t, m.View().Content), "\n") {
-		for _, cell := range []string{"WATCHING", "3 components"} {
-			if index := strings.Index(line, cell); index >= 0 {
-				columns = append(columns, lipgloss.Width(line[:index]))
-			}
-		}
-	}
-	want := screenMarginX + layoutWidth(100) - borderCells/2 - panelPadding - rowPaddingX - watchingColumnWidth
-	if len(columns) != 2 || columns[0] != want || columns[1] != want {
-		t.Fatalf("watching columns start at %v, want both at %d", columns, want)
-	}
-}
-
 func selectedRowOf(t *testing.T, m AppsModel) string {
 	t.Helper()
 	for _, line := range strings.Split(m.View().Content, "\n") {
-		if strings.Contains(plain(t, line), "▸") {
+		if strings.Contains(plain(t, line), "▎") {
 			return line
 		}
 	}
@@ -489,31 +436,5 @@ func TestOnlyTheSelectedAppsOwnLineIsTinted(t *testing.T) {
 	if len(tinted) != 1 {
 		t.Fatalf("%d lines are tinted, want 1", len(tinted))
 	}
-	assertViewContains(t, tinted[0], "▸ Second")
-}
-
-func TestAppsAreSeparatedByABlankLine(t *testing.T) {
-	m := sizedAppsModel(100, 30, api.App{Name: "First"}, api.App{Name: "Second"}, api.App{Name: "Third"})
-	m = pressRune(m, 'j')
-	m = pressRune(m, 'j')
-
-	lines := strings.Split(plain(t, m.View().Content), "\n")
-	first := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, "First") })
-	if strings.TrimSpace(strings.Trim(lines[first+1], "│ ")) != "" || !strings.Contains(lines[first+2], "Second") {
-		t.Fatalf("want First, a blank line, then Second:\n%s", strings.Join(lines[first:first+3], "\n"))
-	}
-}
-
-func TestSelectedRowIsPaddedByHalfALineAboveAndBelow(t *testing.T) {
-	m := sizedAppsModel(100, 30, api.App{Name: "First"}, api.App{Name: "Second"}, api.App{Name: "Third"})
-	m = pressRune(m, 'j')
-
-	lines := strings.Split(plain(t, m.View().Content), "\n")
-	selected := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, "▸") })
-	if !strings.Contains(lines[selected-1], "▄▄▄▄") || !strings.Contains(lines[selected+1], "▀▀▀▀") {
-		t.Fatalf("want a half block above and below the selected row:\n%s", strings.Join(lines[selected-1:selected+2], "\n"))
-	}
-	if strings.ContainsAny(lines[selected-3], "▄▀") || strings.ContainsAny(lines[selected+3], "▄▀") {
-		t.Fatal("only the selected row is padded")
-	}
+	assertViewContains(t, tinted[0], "▎● Second")
 }
