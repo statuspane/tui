@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,12 +13,14 @@ import (
 
 // incidentSteps are the stages of an incident's life, in order. The API's active statuses are the
 // first three; an incident that is resolved is no longer active, so that step is always still ahead.
-var incidentSteps = []struct{ status, label string }{
+var incidentSteps = [...]incidentStep{
 	{"investigating", "Investigating"},
 	{"identified", "Identified"},
 	{"monitoring", "Monitoring"},
 	{"resolved", "Resolved"},
 }
+
+type incidentStep struct{ status, label string }
 
 const (
 	doneMark, currentMark, aheadMark = "✓", "●", "○"
@@ -33,7 +36,7 @@ const (
 // incidentPanel is the app's worst active incident in full, as tall as it needs up to maxHeight.
 func (m AppsModel) incidentPanel(app api.App, width, maxHeight int) string {
 	contentWidth, _ := panelContentSize(width, maxHeight)
-	appDetail, hasDetail := m.details[app.Slug]
+	appDetail, hasDetail := m.selectedDetail.of(app)
 	if !hasDetail {
 		return panel(incidentPanelTitle, mutedStyle.Render(loadingIncident), width, min(oneLineBoxHeight, maxHeight))
 	}
@@ -102,21 +105,38 @@ func wrappedTo(text string, width int) string {
 // dotted line for those ahead. An incident with no status has no line, and when the steps do
 // not fit only the current one is named.
 func progressLine(status *string, currentStyle lipgloss.Style, contentWidth int) string {
-	if status == nil {
-		return ""
-	}
-	current := -1
-	for index, step := range incidentSteps {
-		if step.status == *status {
-			current = index
-		}
-	}
-	if current < 0 {
+	current, isKnown := currentStepIndex(status)
+	if !isKnown {
 		return ""
 	}
 
-	labels := make([]string, len(incidentSteps))
+	labels := stepLabels(current, currentStyle)
+	connectorCount := len(labels) - 1
 	labelsWidth := 0
+	for _, label := range labels {
+		labelsWidth += lipgloss.Width(label)
+	}
+	if labelsWidth+connectorCount*(connectorPadding+minConnectorWidth) > contentWidth {
+		return compactProgress(current, currentStyle)
+	}
+
+	connectorWidth := max((contentWidth-labelsWidth-connectorCount*connectorPadding)/connectorCount, minConnectorWidth)
+	return labelsJoinedByConnectors(labels, current, connectorWidth)
+}
+
+// currentStepIndex is the position of the incident's status among the steps, and whether it is one
+// of them: an incident with no status, or one this client doesn't know, has no current step.
+func currentStepIndex(status *string) (index int, isKnown bool) {
+	if status == nil {
+		return 0, false
+	}
+	index = slices.IndexFunc(incidentSteps[:], func(step incidentStep) bool { return step.status == *status })
+	return index, index >= 0
+}
+
+// stepLabels are the steps with their marks: done, current (in the incident's colour) or ahead.
+func stepLabels(current int, currentStyle lipgloss.Style) []string {
+	labels := make([]string, len(incidentSteps))
 	for index, step := range incidentSteps {
 		switch {
 		case index < current:
@@ -126,18 +146,22 @@ func progressLine(status *string, currentStyle lipgloss.Style, contentWidth int)
 		default:
 			labels[index] = mutedStyle.Render(aheadMark + " " + step.label)
 		}
-		labelsWidth += lipgloss.Width(labels[index])
 	}
+	return labels
+}
 
-	connectorCount := len(incidentSteps) - 1
-	if labelsWidth+connectorCount*(connectorPadding+minConnectorWidth) > contentWidth {
-		return currentStyle.Bold(true).Render(fmt.Sprintf("%s %s · step %d of %d", currentMark, incidentSteps[current].label, current+1, len(incidentSteps)))
-	}
-	connectorWidth := max((contentWidth-labelsWidth-connectorCount*connectorPadding)/connectorCount, minConnectorWidth)
+// compactProgress names only the current step and where it is among them.
+func compactProgress(current int, currentStyle lipgloss.Style) string {
+	return currentStyle.Bold(true).Render(fmt.Sprintf("%s %s · step %d of %d", currentMark, incidentSteps[current].label, current+1, len(incidentSteps)))
+}
+
+// labelsJoinedByConnectors puts a line of connectorWidth cells between the labels: solid up to the
+// current step, dotted after it.
+func labelsJoinedByConnectors(labels []string, current, connectorWidth int) string {
 	var line strings.Builder
 	for index, label := range labels {
 		line.WriteString(label)
-		if index == connectorCount {
+		if index == len(labels)-1 {
 			break
 		}
 		if index < current {

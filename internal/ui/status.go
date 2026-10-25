@@ -2,28 +2,33 @@ package ui
 
 import (
 	"fmt"
-	"strings"
 
 	"charm.land/lipgloss/v2"
 )
 
-// statusAppearance is how a status reads: a short label for rows, a headline for banners, and
-// the colour of both.
 type statusAppearance struct {
-	label    string
-	headline string
-	style    lipgloss.Style
+	label string
+	style lipgloss.Style
 }
 
 // A nil status means no check has run yet.
-var pendingAppearance = statusAppearance{"Pending", "NOT CHECKED YET", mutedStyle}
+var pendingAppearance = statusAppearance{"Pending", mutedStyle}
 
 var statusAppearances = map[string]statusAppearance{
-	"operational":          {"Operational", "ALL SYSTEMS OPERATIONAL", lipgloss.NewStyle().Foreground(colorGreen)},
-	"under_maintenance":    {"Maintenance", "UNDER MAINTENANCE", lipgloss.NewStyle().Foreground(colorBlue)},
-	"degraded_performance": {"Degraded", "DEGRADED PERFORMANCE", lipgloss.NewStyle().Foreground(colorYellow)},
-	"partial_outage":       {"Partial outage", "PARTIAL OUTAGE", lipgloss.NewStyle().Foreground(colorOrange)},
-	"major_outage":         {"Major outage", "MAJOR OUTAGE", lipgloss.NewStyle().Foreground(colorRed)},
+	"operational":          {"Operational", lipgloss.NewStyle().Foreground(colorGreen)},
+	"under_maintenance":    {"Maintenance", lipgloss.NewStyle().Foreground(colorBlue)},
+	"degraded_performance": {"Degraded", lipgloss.NewStyle().Foreground(colorYellow)},
+	"partial_outage":       {"Partial outage", lipgloss.NewStyle().Foreground(colorOrange)},
+	"major_outage":         {"Major outage", lipgloss.NewStyle().Foreground(colorRed)},
+}
+
+// statusOperational is the status of something with nothing wrong.
+const statusOperational = "operational"
+
+// isAffected is whether something has a known status that is not operational. A status that is not
+// there yet means no check has run, which is neither.
+func isAffected(status *string) bool {
+	return status != nil && *status != statusOperational
 }
 
 // appearanceOf shows a status this client doesn't know as it is, unstyled.
@@ -34,7 +39,7 @@ func appearanceOf(status *string) statusAppearance {
 	if appearance, ok := statusAppearances[*status]; ok {
 		return appearance
 	}
-	return statusAppearance{label: *status, headline: strings.ToUpper(*status), style: lipgloss.NewStyle()}
+	return statusAppearance{label: *status, style: lipgloss.NewStyle()}
 }
 
 func statusLabel(status *string) string {

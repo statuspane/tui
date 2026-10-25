@@ -15,11 +15,34 @@ const (
 	sidebarMinWidth     = 28
 	sidebarMaxWidth     = 40
 
-	statusDot     = "●"
-	selectedMark  = "▎"
-	noSelectMark  = " "
-	appsPanelName = "Apps"
+	statusDot             = "●"
+	sidebarSelectedMark   = "▎"
+	sidebarUnselectedMark = " "
+	appsPanelName         = "Apps"
 )
+
+// bannerHeadlines are what a banner says for each status. A status this client doesn't know is
+// said as it is, in capitals.
+var bannerHeadlines = map[string]string{
+	"operational":          "ALL SYSTEMS OPERATIONAL",
+	"under_maintenance":    "UNDER MAINTENANCE",
+	"degraded_performance": "DEGRADED PERFORMANCE",
+	"partial_outage":       "PARTIAL OUTAGE",
+	"major_outage":         "MAJOR OUTAGE",
+}
+
+// pendingHeadline is what a banner says before any check has run.
+const pendingHeadline = "NOT CHECKED YET"
+
+func headlineOf(status *string) string {
+	if status == nil {
+		return pendingHeadline
+	}
+	if headline, ok := bannerHeadlines[*status]; ok {
+		return headline
+	}
+	return strings.ToUpper(*status)
+}
 
 // body is the sidebar of apps and, beside it, what the selected app is doing.
 func (m AppsModel) body(width, height int) string {
@@ -68,13 +91,13 @@ func (m AppsModel) sidebarRow(appIndex, contentWidth int) string {
 	app := m.apps[appIndex]
 	dotStyle := appearanceOf(app.Status).style
 	if appIndex != m.selectedIndex {
-		return noSelectMark + dotStyle.Render(statusDot) + " " + clipTo(app.Name, contentWidth-lipgloss.Width(noSelectMark+statusDot+" "))
+		return sidebarUnselectedMark + dotStyle.Render(statusDot) + " " + clipTo(app.Name, contentWidth-lipgloss.Width(sidebarUnselectedMark+statusDot+" "))
 	}
 
 	tint := rowTintColor(m.hasDarkBackground)
 	tinted := lipgloss.NewStyle().Background(tint)
-	row := accentStyle.Background(tint).Render(selectedMark) + dotStyle.Background(tint).Render(statusDot) + tinted.Render(" ") +
-		tinted.Bold(true).Render(clipTo(app.Name, contentWidth-lipgloss.Width(selectedMark+statusDot+" ")))
+	row := accentStyle.Background(tint).Render(sidebarSelectedMark) + dotStyle.Background(tint).Render(statusDot) + tinted.Render(" ") +
+		tinted.Bold(true).Render(clipTo(app.Name, contentWidth-lipgloss.Width(sidebarSelectedMark+statusDot+" ")))
 	return row + tinted.Render(strings.Repeat(" ", max(contentWidth-lipgloss.Width(row), 0)))
 }
 
@@ -96,11 +119,11 @@ func (m AppsModel) centre(width, height int) string {
 func (m AppsModel) banner(app api.App, width int) string {
 	appearance := appearanceOf(app.Status)
 	look := untintedPanelLook(false)
-	if app.Status != nil && *app.Status != "operational" {
+	if isAffected(app.Status) {
 		look = panelLook{border: appearance.style.Faint(true), title: appearance.style.Bold(true)}
 	}
 	contentWidth, _ := panelContentSize(width, 0)
-	body := appearance.style.Bold(true).Render(statusDot+"  "+appearance.headline) + "\n" +
+	body := appearance.style.Bold(true).Render(statusDot+"  "+headlineOf(app.Status)) + "\n" +
 		mutedStyle.Render(factsLine(m.bannerFacts(app), contentWidth))
 	return panelWithLook(look, app.Name, body, width, lipgloss.Height(body)+panelChromeHeight)
 }
@@ -117,15 +140,10 @@ func factsLine(facts []string, width int) string {
 // bannerFacts are how many of the app's components are affected and when it was checked, once the
 // app's detail is in; until then the list's own count of components.
 func (m AppsModel) bannerFacts(app api.App) []string {
-	appDetail, hasDetail := m.details[app.Slug]
+	appDetail, hasDetail := m.selectedDetail.of(app)
 	if !hasDetail {
 		return []string{fmt.Sprintf("%d components", app.WatchedComponentsCount)}
 	}
-	affected := 0
-	for _, component := range appDetail.WatchedComponents {
-		if component.Status != nil && *component.Status != "operational" {
-			affected++
-		}
-	}
-	return []string{fmt.Sprintf("%d of %d components affected", affected, len(appDetail.WatchedComponents)), checkedText(appDetail.LastCheckedAt, m.now())}
+	affected, _ := affectedComponents(appDetail.WatchedComponents)
+	return []string{fmt.Sprintf("%d of %d components affected", len(affected), len(appDetail.WatchedComponents)), checkedText(appDetail.LastCheckedAt, m.now())}
 }

@@ -90,13 +90,13 @@ func TestMovingTheSelectionLoadsTheNewAppOnlyOnceItHasRested(t *testing.T) {
 	}
 	m, cmd = send(m, keyJ)
 	m = settledApps(m, cmd)
-	m, cmd = send(m, detailSettledMsg{sequence: m.detailSequence - 1})
+	m, cmd = send(m, detailSettledMsg{sequence: m.selectedDetail.sequence - 1})
 	m = settledApps(m, cmd)
 	if asked != "web-app" {
 		t.Fatalf("a pause that was interrupted must not ask, but %q was asked for", asked)
 	}
 
-	m, cmd = send(m, detailSettledMsg{sequence: m.detailSequence})
+	m, cmd = send(m, detailSettledMsg{sequence: m.selectedDetail.sequence})
 	settledApps(m, cmd)
 
 	if asked != "mobile" {
@@ -332,4 +332,30 @@ func TestTheClockShowsTheTimeInTheUsersOwnTimezone(t *testing.T) {
 
 	assertViewContains(t, view, "09:00:00 BRT")
 	assertViewLacks(t, view, "12:00:00")
+}
+
+func TestAHeadlineSaysEachStatusInWordsAndAnUnknownOneAsItIs(t *testing.T) {
+	cases := []struct {
+		status *string
+		want   string
+	}{
+		{nil, "NOT CHECKED YET"},
+		{stringPtr("under_maintenance"), "UNDER MAINTENANCE"},
+		{stringPtr("partial_outage"), "PARTIAL OUTAGE"},
+		{stringPtr("something_new"), "SOMETHING_NEW"},
+	}
+
+	for _, testCase := range cases {
+		if got := headlineOf(testCase.status); got != testCase.want {
+			t.Errorf("headlineOf(%v) = %q, want %q", testCase.status, got, testCase.want)
+		}
+	}
+}
+
+func TestAStatusThatIsNotAStepHasNoProgressLine(t *testing.T) {
+	for _, status := range []*string{nil, stringPtr("something_new")} {
+		if got := progressLine(status, mutedStyle, 80); got != "" {
+			t.Errorf("progressLine(%v) = %q, want none", status, got)
+		}
+	}
 }

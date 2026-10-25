@@ -15,15 +15,6 @@ import (
 const (
 	refreshInterval = 30 * time.Second
 	fetchTimeout    = 15 * time.Second
-	// detailSettleDelay is how long the selection has to rest on an app before its detail is
-	// asked for, so moving down a long list does not spend the API's request limit.
-	detailSettleDelay = 300 * time.Millisecond
-	// clockInterval is how often the header's clock is redrawn.
-	clockInterval = time.Second
-
-	selectionMarker   = "▸ "
-	noSelectionMarker = "  "
-	columnGap         = "  "
 )
 
 var appsHints = []keyHint{
@@ -42,21 +33,6 @@ type AppsBackend interface {
 	AppGetter
 }
 
-// clockTickMsg redraws the header's clock; each one arms the next.
-type clockTickMsg struct{}
-
-func clockTick() tea.Cmd {
-	return tea.Tick(clockInterval, func(time.Time) tea.Msg { return clockTickMsg{} })
-}
-
-// detailSettledMsg says the selection stayed put for detailSettleDelay. Its sequence number tells a
-// pause that was interrupted by another move from the last one.
-type detailSettledMsg struct{ sequence int }
-
-// selectedDetailLoadedMsg is the detail of the app the sidebar had selected. It is not
-// appDetailLoadedMsg, which the app screen would take for its own.
-type selectedDetailLoadedMsg struct{ appDetail api.AppDetail }
-
 // openAppMsg asks the root model to show one app's detail screen.
 type openAppMsg struct{ slug, name string }
 
@@ -74,8 +50,7 @@ type refreshTickMsg struct{ sequence int }
 type AppsModel struct {
 	backend         AppsBackend
 	apps            []api.App
-	details         map[string]api.AppDetail
-	detailSequence  int
+	selectedDetail  selectedDetail
 	now             func() time.Time
 	err             error
 	hasLoaded       bool
@@ -90,7 +65,7 @@ type AppsModel struct {
 }
 
 func NewAppsModel(backend AppsBackend) AppsModel {
-	return AppsModel{backend: backend, details: map[string]api.AppDetail{}, now: time.Now, isLoading: true, spinner: spinner.New(), hasDarkBackground: true}
+	return AppsModel{backend: backend, selectedDetail: newSelectedDetail(), now: time.Now, isLoading: true, spinner: spinner.New(), hasDarkBackground: true}
 }
 
 func (m AppsModel) Init() tea.Cmd {
@@ -114,19 +89,19 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apps, m.err, m.hasLoaded, m.isLoading = msg.apps, nil, true, false
 		m.selectedIndex = min(m.selectedIndex, max(len(m.apps)-1, 0))
 		next, cmd := m.reloadOrScheduleRefresh()
-		return next, tea.Batch(cmd, next.(AppsModel).fetchSelectedDetailCmd())
+		return next, tea.Batch(cmd, m.fetchSelectedDetailCmd())
 
 	case clockTickMsg:
 		return m, clockTick()
 
 	case detailSettledMsg:
-		if msg.sequence != m.detailSequence {
+		if !m.selectedDetail.hasRested(msg) {
 			return m, nil
 		}
 		return m, m.fetchSelectedDetailCmd()
 
 	case selectedDetailLoadedMsg:
-		m.details[msg.appDetail.Slug] = msg.appDetail
+		m.selectedDetail = m.selectedDetail.withLoaded(msg)
 		return m, nil
 
 	case appsFailedMsg:
@@ -202,9 +177,9 @@ func (m AppsModel) movedTo(index int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.selectedIndex = index
-	m.detailSequence++
-	sequence := m.detailSequence
-	return m, tea.Tick(detailSettleDelay, func(time.Time) tea.Msg { return detailSettledMsg{sequence: sequence} })
+	var restCmd tea.Cmd
+	m.selectedDetail, restCmd = m.selectedDetail.afterSelectionMoved()
+	return m, restCmd
 }
 
 func (m AppsModel) selectedApp() (api.App, bool) {
@@ -214,7 +189,7 @@ func (m AppsModel) selectedApp() (api.App, bool) {
 	return m.apps[m.selectedIndex], true
 }
 
-func (m AppsModel) startRefresh() (tea.Model, tea.Cmd) {
+func (m AppsModel) startRefresh() (AppsModel, tea.Cmd) {
 	m.isLoading = true
 	return m, m.fetchCmd()
 }
@@ -223,7 +198,7 @@ func (m AppsModel) fetchCmd() tea.Cmd {
 	return tea.Batch(m.spinner.Tick, fetchApps(m.backend))
 }
 
-func (m AppsModel) reloadOrScheduleRefresh() (tea.Model, tea.Cmd) {
+func (m AppsModel) reloadOrScheduleRefresh() (AppsModel, tea.Cmd) {
 	if m.reloadAfterLoad {
 		m.reloadAfterLoad = false
 		m.refreshSequence++
@@ -232,7 +207,7 @@ func (m AppsModel) reloadOrScheduleRefresh() (tea.Model, tea.Cmd) {
 	return m.scheduleRefresh()
 }
 
-func (m AppsModel) scheduleRefresh() (tea.Model, tea.Cmd) {
+func (m AppsModel) scheduleRefresh() (AppsModel, tea.Cmd) {
 	m.refreshSequence++
 	sequence := m.refreshSequence
 	return m, tea.Tick(refreshInterval, func(time.Time) tea.Msg {
@@ -245,19 +220,6 @@ func (m AppsModel) View() tea.View {
 	width, panelHeight := layoutWidth(screenWidth), bodyHeight(screenHeight)
 	header := headerBar(accentStyle.Render(brandText)+summaryGap+statusSummary(m.apps), m.clockText(), width)
 	return tea.NewView(stackedScreen(header, m.body(width, panelHeight), footerBar(appsHints, m.footerTrailing(), width)))
-}
-
-// clockText is the time where the user is, with its zone, and whether the screen is keeping up: "live" while refreshes
-// succeed, and a warning once one fails, since the figures on screen are then getting old.
-func (m AppsModel) clockText() string {
-	text := mutedStyle.Render(m.now().Format("15:04:05 MST"))
-	switch {
-	case m.err != nil && m.hasLoaded:
-		return text + mutedStyle.Render(" · ") + errorStyle.Render("not refreshing")
-	case m.hasLoaded:
-		return text + mutedStyle.Render(" · ") + watchedStyle.Render("live")
-	}
-	return text
 }
 
 func (m AppsModel) windowSize() (width, height int) {
@@ -279,23 +241,13 @@ func (m AppsModel) refreshNotice() string {
 	return ""
 }
 
-// fetchSelectedDetailCmd asks for the selected app's detail; a failure is left unsaid, because the
-// banner reads fine from the list's own figures.
+// fetchSelectedDetailCmd asks for the selected app's detail.
 func (m AppsModel) fetchSelectedDetailCmd() tea.Cmd {
 	app, ok := m.selectedApp()
 	if !ok {
 		return nil
 	}
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
-		defer cancel()
-
-		appDetail, err := m.backend.GetApp(ctx, app.Slug)
-		if err != nil {
-			return nil
-		}
-		return selectedDetailLoadedMsg{appDetail: appDetail}
-	}
+	return fetchSelectedAppDetail(m.backend, app)
 }
 
 func fetchApps(appLister AppLister) tea.Cmd {

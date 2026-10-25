@@ -129,20 +129,21 @@ what doesn't fit; a panel also cuts a title that is too long, such as an app's n
 - `refreshInterval` and `fetchTimeout` are named constants; keep durations out of call sites.
 
 - The apps screen shows the selected app's detail (the banner's counts, the incident, the affected
-  components), so it asks for it: when the apps load (every refresh too) and, after a move, only
-  once the selection has rested for `detailSettleDelay` (`detailSequence` tells an interrupted
-  pause from the last one). The API allows 60 requests a minute per key; never fetch per move.
-  Answers are kept in `details` by slug, so going back to an app shows its detail at once, and a
-  failure is silent: the banner falls back to the list's own count of components. The answer is
+  components), and `selectedDetail` (`selected_detail.go`) owns it: the details that have arrived,
+  by slug, and a count of moves that tells a pause that another move interrupted from the last one.
+  The screen asks for the detail when the apps load (every refresh too) and, after a move, only
+  once the selection has rested for `detailSettleDelay`. The API allows 60 requests a minute per
+  key; never fetch per move. Going back to an app shows its detail at once, and a failure is
+  silent: the banner falls back to the list's own count of components. The answer is
   `selectedDetailLoadedMsg`, not `appDetailLoadedMsg`: the root sends every non-key message to
   both screens and the app screen would take the other one for its own.
 - Text in a panel that is narrower than its text is wrapped or shortened by us, never left to the
   panel's cut: `factsLine` puts short phrases each on a line when they don't fit one, and
   `progressLine` names only the current step when the four don't fit. Check a new line at
   `fallbackWidth`, where the centre column's content is 40 cells.
-- The header's clock is redrawn by `clockTickMsg` once a second and reads `now`, in the zone `now`
-  carries: the user's, since `time.Now` is local (tests give it a fixed zone). "live" is only said
-  while the last refresh worked.
+- The header's clock (`mission_clock.go`) is redrawn by `clockTickMsg` once a second and reads
+  `now`, in the zone `now` carries: the user's, since `time.Now` is local (tests give it a fixed
+  zone). "live" is only said while the last refresh worked.
 
 ## Testing
 
@@ -151,4 +152,4 @@ Substring checks survive styling because escape codes wrap, not split, the text.
 `settledApps` (in `mission_control_test.go`) feeds the apps screen the answers to its commands,
 leaving out the spinner's ticks, which re-arm forever. A timer (`tea.Tick`) is not waited for:
 `collectMessages` gives each command `commandWait` and moves on, so a test sends the timer's
-message itself (`detailSettledMsg{sequence: m.detailSequence}`).
+message itself (`detailSettledMsg{sequence: m.selectedDetail.sequence}`).

@@ -15,6 +15,10 @@ import (
 const (
 	loadingText = "Loading…"
 
+	selectionMarker   = "▸ "
+	noSelectionMarker = "  "
+	columnGap         = "  "
+
 	// Wide enough for a short error while the providers are not there to size the pane.
 	minProvidersWidth = 30
 

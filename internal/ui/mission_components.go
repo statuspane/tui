@@ -13,7 +13,7 @@ const affectedPanelTitle = "Affected components"
 // affectedPanel lists the app's components that are not operational, the worst first, and counts
 // the operational ones under them. There is none when nothing is affected or the detail is not in.
 func (m AppsModel) affectedPanel(app api.App, width, maxHeight int) string {
-	appDetail, hasDetail := m.details[app.Slug]
+	appDetail, hasDetail := m.selectedDetail.of(app)
 	if !hasDetail {
 		return ""
 	}
@@ -44,11 +44,10 @@ func (m AppsModel) affectedPanel(app api.App, width, maxHeight int) string {
 func affectedComponents(components []api.Component) (affected []api.Component, operationalCount int) {
 	for _, component := range components {
 		switch {
-		case component.Status == nil:
-		case *component.Status == "operational":
-			operationalCount++
-		default:
+		case isAffected(component.Status):
 			affected = append(affected, component)
+		case component.Status != nil:
+			operationalCount++
 		}
 	}
 	slices.SortStableFunc(affected, func(left, right api.Component) int {
