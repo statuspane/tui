@@ -18,6 +18,11 @@ All notable user-facing changes are listed here. The format follows
   looks the same everywhere. The colours are made for a dark background: on a light terminal the
   panel borders are faint.
 
+### Security
+
+- Built with Go 1.27.3, which fixes a vulnerability in the standard library's certificate
+  verification (`crypto/x509`).
+
 ## [0.4.0] - 2026-10-18
 
 A redesigned interface: every screen is framed and fills the terminal, an app's incidents and
