@@ -6,6 +6,12 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-27
+
+The apps list becomes a Mission control screen: your apps in a sidebar and, beside it, what the
+selected app is doing, including a strip of its last 30 days of status history. The TUI also has
+its own colours now, and is built with a Go release that fixes a security issue.
+
 ### Added
 
 - The apps screen shows the selected app's status history: a strip with a block for each of its
@@ -136,7 +142,8 @@ components an app watches are not here yet.
 - Plain explanations for the common failures: a missing API key prints an example config file,
   a rejected key names the setting to check, and a rate limit says how long to wait.
 
-[Unreleased]: https://github.com/statuspane/tui/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/statuspane/tui/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/statuspane/tui/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/statuspane/tui/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/statuspane/tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/statuspane/tui/compare/v0.1.0...v0.2.0
