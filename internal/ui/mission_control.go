@@ -15,23 +15,18 @@ const (
 	sidebarMinWidth     = 28
 	sidebarMaxWidth     = 40
 
-	// Under the status history, the affected components keep at least this much: their borders, two
-	// rows and the line that counts the operational ones.
-	minAffectedPanelHeight = 5
-
 	statusDot             = "●"
 	sidebarSelectedMark   = "▎"
 	sidebarUnselectedMark = " "
 	appsPanelName         = "Apps"
 )
 
-// hasRoomForHistory is whether the status history fits without taking room the incident (which is
-// as tall as it is) or the affected components (which keep at least minAffectedPanelHeight, when
-// there are any) need. History is the first thing to give way on a short window.
-func (m AppsModel) hasRoomForHistory(app api.App, width, room, incidentHeight int) bool {
-	roomAfterIncident := room - incidentHeight
+// hasRoomForHistory is whether the status history fits in the room left under the incident without
+// taking what the affected components (when there are any) need: History is the first thing to
+// give way on a short window.
+func hasRoomForHistory(roomAfterIncident int, hasAffected bool) bool {
 	affectedNeed := 0
-	if m.affectedPanel(app, width, roomAfterIncident) != "" {
+	if hasAffected {
 		affectedNeed = minAffectedPanelHeight
 	}
 	return roomAfterIncident-historyPanelHeight >= affectedNeed
@@ -128,7 +123,7 @@ func (m AppsModel) selectedAppPanels(width, height int) string {
 	incident := m.incidentPanel(app, width, room)
 
 	panels := []string{banner}
-	if m.hasRoomForHistory(app, width, room, lipgloss.Height(incident)) {
+	if hasRoomForHistory(room-lipgloss.Height(incident), m.hasAffectedComponents(app)) {
 		strip := m.historyPanel(app, width)
 		panels = append(panels, strip)
 		room -= lipgloss.Height(strip)

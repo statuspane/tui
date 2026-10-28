@@ -26,11 +26,6 @@ type AppLister interface {
 	ListApps(ctx context.Context) ([]api.App, error)
 }
 
-// AppHistoryGetter is what the apps screen needs to draw the selected app's history.
-type AppHistoryGetter interface {
-	GetAppHistory(ctx context.Context, slug string, days int) (api.AppHistory, error)
-}
-
 // AppsBackend is what the apps screen needs from the API client: the list, and the selected
 // app's detail and history.
 type AppsBackend interface {
@@ -57,6 +52,7 @@ type AppsModel struct {
 	backend         AppsBackend
 	apps            []api.App
 	selectedDetail  selectedDetail
+	selectedHistory selectedHistory
 	now             func() time.Time
 	err             error
 	hasLoaded       bool
@@ -71,7 +67,7 @@ type AppsModel struct {
 }
 
 func NewAppsModel(backend AppsBackend) AppsModel {
-	return AppsModel{backend: backend, selectedDetail: newSelectedDetail(), now: time.Now, isLoading: true, spinner: spinner.New(), hasDarkBackground: true}
+	return AppsModel{backend: backend, selectedDetail: newSelectedDetail(), selectedHistory: newSelectedHistory(), now: time.Now, isLoading: true, spinner: spinner.New(), hasDarkBackground: true}
 }
 
 func (m AppsModel) Init() tea.Cmd {
@@ -111,11 +107,11 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case selectedHistoryLoadedMsg:
-		m.selectedDetail = m.selectedDetail.withHistoryLoaded(msg)
+		m.selectedHistory = m.selectedHistory.withLoaded(msg)
 		return m, nil
 
 	case selectedHistoryFailedMsg:
-		m.selectedDetail = m.selectedDetail.withHistoryFailed(msg)
+		m.selectedHistory = m.selectedHistory.withFailed(msg)
 		return m, nil
 
 	case appsFailedMsg:

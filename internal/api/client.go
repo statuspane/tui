@@ -55,12 +55,12 @@ func (c *Client) GetApp(ctx context.Context, appSlug string) (AppDetail, error) 
 
 // GetAppHistory asks for the last days days, ending today.
 func (c *Client) GetAppHistory(ctx context.Context, appSlug string, days int) (AppHistory, error) {
-	var history AppHistory
+	var appHistory AppHistory
 	path := appPath(appSlug) + "/history?days=" + strconv.Itoa(days)
-	if err := c.do(ctx, http.MethodGet, path, nil, &history); err != nil {
+	if err := c.do(ctx, http.MethodGet, path, nil, &appHistory); err != nil {
 		return AppHistory{}, err
 	}
-	return history, nil
+	return appHistory, nil
 }
 
 func appPath(appSlug string) string {

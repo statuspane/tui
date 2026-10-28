@@ -17,28 +17,6 @@ const detailSettleDelay = 300 * time.Millisecond
 // pause that was interrupted by another move from the last one.
 type detailSettledMsg struct{ sequence int }
 
-// historyDayCount is how many days of history the screen asks for: the strip shows as many of them
-// as fit.
-const historyDayCount = 30
-
-// selectedHistoryLoadedMsg and selectedHistoryFailedMsg carry the slug they were asked for: the
-// history's own answer does not name the app.
-type selectedHistoryLoadedMsg struct {
-	slug    string
-	history api.AppHistory
-}
-
-type selectedHistoryFailedMsg struct{ slug string }
-
-// historyState is whether an app's history has arrived, failed to, or is still on its way.
-type historyState int
-
-const (
-	historyLoading historyState = iota
-	historyLoaded
-	historyFailed
-)
-
 // selectedDetailLoadedMsg is the detail of the app the sidebar had selected. It is not
 // appDetailLoadedMsg, which the app screen would take for its own.
 type selectedDetailLoadedMsg struct{ appDetail api.AppDetail }
@@ -48,43 +26,11 @@ type selectedDetailLoadedMsg struct{ appDetail api.AppDetail }
 // so going back to an app shows it at once.
 type selectedDetail struct {
 	appDetailBySlug map[string]api.AppDetail
-	historyBySlug   map[string]api.AppHistory
-	// historyFailedSlugs holds the apps whose history could not be fetched and has none to show.
-	historyFailedSlugs map[string]bool
-	sequence           int
+	sequence        int
 }
 
 func newSelectedDetail() selectedDetail {
-	return selectedDetail{
-		appDetailBySlug:    map[string]api.AppDetail{},
-		historyBySlug:      map[string]api.AppHistory{},
-		historyFailedSlugs: map[string]bool{},
-	}
-}
-
-// historyOf is the app's history, and whether it has arrived, failed or is still on its way. An
-// app keeps the history it had when a later request fails, so a refresh cannot take it away.
-func (d selectedDetail) historyOf(app api.App) (api.AppHistory, historyState) {
-	if history, hasHistory := d.historyBySlug[app.Slug]; hasHistory {
-		return history, historyLoaded
-	}
-	if d.historyFailedSlugs[app.Slug] {
-		return api.AppHistory{}, historyFailed
-	}
-	return api.AppHistory{}, historyLoading
-}
-
-func (d selectedDetail) withHistoryLoaded(msg selectedHistoryLoadedMsg) selectedDetail {
-	d.historyBySlug[msg.slug] = msg.history
-	delete(d.historyFailedSlugs, msg.slug)
-	return d
-}
-
-func (d selectedDetail) withHistoryFailed(msg selectedHistoryFailedMsg) selectedDetail {
-	if _, hasHistory := d.historyBySlug[msg.slug]; !hasHistory {
-		d.historyFailedSlugs[msg.slug] = true
-	}
-	return d
+	return selectedDetail{appDetailBySlug: map[string]api.AppDetail{}}
 }
 
 // of is the app's detail, and whether it has arrived.
@@ -122,20 +68,5 @@ func fetchSelectedAppDetail(appGetter AppGetter, app api.App) tea.Cmd {
 			return nil
 		}
 		return selectedDetailLoadedMsg{appDetail: appDetail}
-	}
-}
-
-// fetchSelectedAppHistory asks for the app's last historyDayCount days. It is a request of its own,
-// so a slow or failed one leaves the banner, the incident and the components as they are.
-func fetchSelectedAppHistory(historyGetter AppHistoryGetter, app api.App) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
-		defer cancel()
-
-		history, err := historyGetter.GetAppHistory(ctx, app.Slug, historyDayCount)
-		if err != nil {
-			return selectedHistoryFailedMsg{slug: app.Slug}
-		}
-		return selectedHistoryLoadedMsg{slug: app.Slug, history: history}
 	}
 }

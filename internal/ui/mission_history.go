@@ -12,14 +12,17 @@ import (
 
 const (
 	// A day is one block and a space before the next one. The no-data dot takes the block's width.
-	dayCell       = "▇"
-	noDataCell    = "·"
-	dayCellGap    = " "
-	dayCellWidth  = 1
-	cellsPerDay   = dayCellWidth + len(dayCellGap)
-	todayLabel    = "today"
-	noHistoryText = "No history yet"
+	dayCell         = "▇"
+	noDataCell      = "·"
+	dayCellGap      = " "
+	dayCellWidth    = 1
+	columnsPerDay   = dayCellWidth + len(dayCellGap)
+	todayLabel      = "today"
+	noHistoryText   = "No history yet"
+	dateLabelLayout = "Jan 2"
 
+	historyPanelTitle = "Status history"
+	// The panel's body is the strip, the dates under it and when tracking began.
 	historyPanelLines  = 3
 	historyPanelHeight = historyPanelLines + panelChromeHeight
 
@@ -31,59 +34,58 @@ const (
 // for every state, so the column does not jump when the history arrives.
 func (m AppsModel) historyPanel(app api.App, width int) string {
 	contentWidth, _ := panelContentSize(width, historyPanelHeight)
-	history, state := m.selectedDetail.historyOf(app)
+	appHistory, state := m.selectedHistory.of(app)
 	switch state {
 	case historyLoaded:
-		body, shownDays := historyPanelBody(history, contentWidth)
-		return panel(fmt.Sprintf("Last %d days", shownDays), body, width, historyPanelHeight)
+		shownDays := mostRecentDays(appHistory.Days, contentWidth)
+		return panel(fmt.Sprintf("Last %d days", len(shownDays)), historyPanelBody(shownDays, appHistory.TrackingSince), width, historyPanelHeight)
 	case historyFailed:
 		return panel(historyPanelTitle, mutedStyle.Render(historyUnavailable), width, historyPanelHeight)
 	}
 	return panel(historyPanelTitle, mutedStyle.Render(loadingHistory), width, historyPanelHeight)
 }
 
-const historyPanelTitle = "Status history"
+// mostRecentDays is the days that fit contentWidth, the newest ones when not all do. The last day
+// needs no gap after it.
+func mostRecentDays(days []api.HistoryDay, contentWidth int) []api.HistoryDay {
+	fittingDayCount := min(len(days), (contentWidth+len(dayCellGap))/columnsPerDay)
+	return days[len(days)-fittingDayCount:]
+}
 
-// historyPanelBody is the strip, the dates it covers under it and when tracking began, and how
-// many days it shows: the most recent ones that fit contentWidth.
-func historyPanelBody(history api.AppHistory, contentWidth int) (body string, shownDays int) {
-	cells, shownDays := historyCells(history.Days, contentWidth)
-	firstShownDay := history.Days[len(history.Days)-shownDays:]
+// historyPanelBody is the strip, the dates it covers under it and when tracking began.
+func historyPanelBody(shownDays []api.HistoryDay, trackingSince *time.Time) string {
 	return strings.Join([]string{
-		cells,
-		mutedStyle.Render(historyRangeLabels(firstShownDay, shownDays)),
-		mutedStyle.Render(historyCaption(history.TrackingSince)),
-	}, "\n"), shownDays
+		historyCells(shownDays),
+		mutedStyle.Render(historyRangeLabels(shownDays)),
+		mutedStyle.Render(historyCaption(trackingSince)),
+	}, "\n")
 }
 
 // historyCells is a cell per day, oldest first, coloured by the day's status. A day with no data
-// is dots in the muted colour, so it never looks like an operational day and reads without colour.
-func historyCells(days []api.HistoryDay, contentWidth int) (cells string, shownDays int) {
-	shownDays = min(len(days), (contentWidth+len(dayCellGap))/cellsPerDay)
-	shown := days[len(days)-shownDays:]
-
-	rendered := make([]string, len(shown))
-	for index, day := range shown {
+// is a dot in the muted colour, so it never looks like an operational day and reads without colour.
+func historyCells(shownDays []api.HistoryDay) string {
+	renderedCells := make([]string, len(shownDays))
+	for index, day := range shownDays {
 		if day.Status == nil {
-			rendered[index] = mutedStyle.Render(noDataCell)
+			renderedCells[index] = mutedStyle.Render(noDataCell)
 			continue
 		}
-		rendered[index] = appearanceOf(day.Status).style.Render(dayCell)
+		renderedCells[index] = appearanceOf(day.Status).style.Render(dayCell)
 	}
-	return strings.Join(rendered, dayCellGap), shownDays
+	return strings.Join(renderedCells, dayCellGap)
 }
 
 // historyRangeLabels puts the date the strip starts on under its left end and "today" under its
 // right. A date that cannot be read is said as how many days back the strip goes.
-func historyRangeLabels(shownDays []api.HistoryDay, dayCount int) string {
-	if dayCount == 0 {
+func historyRangeLabels(shownDays []api.HistoryDay) string {
+	if len(shownDays) == 0 {
 		return ""
 	}
-	left := fmt.Sprintf("%d days ago", dayCount)
+	left := fmt.Sprintf("%d days ago", len(shownDays))
 	if firstDay, err := time.Parse(time.DateOnly, shownDays[0].Date); err == nil {
-		left = firstDay.Format("Jan 2")
+		left = firstDay.Format(dateLabelLayout)
 	}
-	stripWidth := dayCount*cellsPerDay - len(dayCellGap)
+	stripWidth := len(shownDays)*columnsPerDay - len(dayCellGap)
 	return left + strings.Repeat(" ", max(stripWidth-lipgloss.Width(left)-len(todayLabel), 1)) + todayLabel
 }
 
@@ -92,5 +94,5 @@ func historyCaption(trackingSince *time.Time) string {
 	if trackingSince == nil {
 		return noHistoryText
 	}
-	return "Tracking since " + trackingSince.UTC().Format("Jan 2")
+	return "Tracking since " + trackingSince.UTC().Format(dateLabelLayout)
 }

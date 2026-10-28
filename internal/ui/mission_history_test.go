@@ -23,11 +23,11 @@ func TestTheStripShowsADayEachWithItsRangeAndWhenTrackingBegan(t *testing.T) {
 
 func TestADayWithNoDataIsDotsAndNeverLooksOperational(t *testing.T) {
 	trackingSince := time.Date(2026, time.October, 3, 0, 0, 0, 0, time.UTC)
-	history := thirtyOperationalDays(&trackingSince)
+	appHistory := operationalHistory(&trackingSince)
 	for index := range 5 {
-		history.Days[index].Status = nil
+		appHistory.Days[index].Status = nil
 	}
-	m := modelWithHistory(t, degradedAppDetail(), history, nil, testWidth, testHeight)
+	m := modelWithHistory(t, degradedAppDetail(), appHistory, nil, testWidth, testHeight)
 
 	strip := lineContaining(t, m.View().Content, noDataCell+dayCellGap+noDataCell)
 
@@ -42,9 +42,9 @@ func TestInANarrowWindowTheStripShowsTheMostRecentDaysThatFitAndSaysHowMany(t *t
 	view := plain(t, m.View().Content)
 
 	// The centre column's content is 40 cells at this width, and the last day needs no gap after it.
-	fittingDays := (40 + len(dayCellGap)) / cellsPerDay
+	fittingDays := (40 + len(dayCellGap)) / columnsPerDay
 	firstShownDay := detailNow.AddDate(0, 0, 1-fittingDays)
-	assertViewContains(t, view, fmt.Sprintf("Last %d days", fittingDays), firstShownDay.Format("Jan 2"))
+	assertViewContains(t, view, fmt.Sprintf("Last %d days", fittingDays), firstShownDay.Format(dateLabelLayout))
 	assertViewLacks(t, view, "days ago")
 	assertEveryLineHasWidth(t, m.View().Content, fallbackWidth)
 }
@@ -90,34 +90,34 @@ func TestTheSelectedAppsHistoryIsAskedFor(t *testing.T) {
 
 func TestOneAppsHistoryIsNeverShownForAnotherAndAFailureKeepsWhatArrived(t *testing.T) {
 	webApp, payments := api.App{Slug: "web-app"}, api.App{Slug: "payments"}
-	history := thirtyOperationalDays(nil)
+	appHistory := operationalHistory(nil)
 
-	detail := newSelectedDetail().withHistoryLoaded(selectedHistoryLoadedMsg{slug: "web-app", history: history})
-	if _, state := detail.historyOf(payments); state != historyLoading {
+	selectedHistories := newSelectedHistory().withLoaded(selectedHistoryLoadedMsg{slug: "web-app", appHistory: appHistory})
+	if _, state := selectedHistories.of(payments); state != historyLoading {
 		t.Errorf("payments has no history yet, but is %v", state)
 	}
 
-	detail = detail.withHistoryFailed(selectedHistoryFailedMsg{slug: "web-app"}).withHistoryFailed(selectedHistoryFailedMsg{slug: "payments"})
+	selectedHistories = selectedHistories.withFailed(selectedHistoryFailedMsg{slug: "web-app"}).withFailed(selectedHistoryFailedMsg{slug: "payments"})
 
-	if shown, state := detail.historyOf(webApp); state != historyLoaded || len(shown.Days) != historyDayCount {
+	if shown, state := selectedHistories.of(webApp); state != historyLoaded || len(shown.Days) != historyDayCount {
 		t.Errorf("a later failure must not take away the history web-app has: %v", state)
 	}
-	if _, state := detail.historyOf(payments); state != historyFailed {
+	if _, state := selectedHistories.of(payments); state != historyFailed {
 		t.Errorf("payments never loaded and failed, but is %v", state)
 	}
 
-	detail = detail.withHistoryLoaded(selectedHistoryLoadedMsg{slug: "payments", history: history})
-	if _, state := detail.historyOf(payments); state != historyLoaded {
+	selectedHistories = selectedHistories.withLoaded(selectedHistoryLoadedMsg{slug: "payments", appHistory: appHistory})
+	if _, state := selectedHistories.of(payments); state != historyLoaded {
 		t.Errorf("a later success replaces the failure, but payments is %v", state)
 	}
 }
 
 func TestTheStripKeepsTheNewestDaysWhenOnlySomeFit(t *testing.T) {
 	trackingSince := time.Date(2026, time.October, 3, 0, 0, 0, 0, time.UTC)
-	history := thirtyOperationalDays(&trackingSince)
-	history.Days[0].Status = stringPtr("major_outage")
-	history.Days[len(history.Days)-1].Status = stringPtr("degraded_performance")
-	m := modelWithHistory(t, degradedAppDetail(), history, nil, fallbackWidth, 40)
+	appHistory := operationalHistory(&trackingSince)
+	appHistory.Days[0].Status = stringPtr("major_outage")
+	appHistory.Days[len(appHistory.Days)-1].Status = stringPtr("degraded_performance")
+	m := modelWithHistory(t, degradedAppDetail(), appHistory, nil, fallbackWidth, 40)
 
 	var strip string
 	for _, line := range strings.Split(m.View().Content, "\n") {
@@ -137,10 +137,17 @@ func TestTheStripKeepsTheNewestDaysWhenOnlySomeFit(t *testing.T) {
 func TestADateThatCannotBeReadFallsBackToHowManyDaysBack(t *testing.T) {
 	days := []api.HistoryDay{{Date: "not a date"}, {Date: "2026-10-14"}}
 
-	if got := historyRangeLabels(days, 2); !strings.HasPrefix(got, "2 days ago") {
+	if got := historyRangeLabels(days); !strings.HasPrefix(got, "2 days ago") {
 		t.Errorf("labels = %q", got)
 	}
-	if got := historyRangeLabels(nil, 0); got != "" {
+	if got := historyRangeLabels(nil); got != "" {
 		t.Errorf("no days, no labels, but got %q", got)
 	}
+}
+
+func TestWithoutATrackingDateTheStripSaysThereIsNoHistoryYet(t *testing.T) {
+	m := modelWithHistory(t, degradedAppDetail(), operationalHistory(nil), nil, testWidth, testHeight)
+
+	assertViewContains(t, m.View().Content, "No history yet")
+	assertViewLacks(t, plain(t, m.View().Content), "Tracking since")
 }
