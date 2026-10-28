@@ -4,6 +4,8 @@ A terminal client for [StatusPane](https://statuspane.io): see your organization
 status of every component they watch, without leaving the terminal. It talks to the StatusPane
 public API with an organization API key.
 
+![The apps screen: your apps in a sidebar and, for the selected one, its status, the last 30 days of history, its active incident and its affected components](assets/mission-control.webp)
+
 Contributors and coding agents: see [AGENTS.md](AGENTS.md).
 
 ## Build
