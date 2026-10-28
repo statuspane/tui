@@ -13,6 +13,8 @@ All notable user-facing changes are listed here. The format follows
   day (which is not the same as operational) and a line saying when it began tracking. A narrow
   window shows the most recent days that fit. The strip makes room for the incident and the
   affected components first, so on a short window it is left out.
+- When an app has several incidents, the incident panel says that `enter` opens the app to read
+  every one in full: only the worst is shown in full on the apps screen, the others as a line each.
 
 ### Changed
 

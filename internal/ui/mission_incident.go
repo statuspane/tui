@@ -30,7 +30,10 @@ const (
 	connectorPadding  = 2
 
 	incidentPanelTitle = "Active incident"
-	loadingIncident    = "Loading…"
+	// moreIncidentsHint is shown after the other incidents' lines, since they are only a line each
+	// here and the app's own screen has every incident in full.
+	moreIncidentsHint = "to read every incident in full"
+	loadingIncident   = "Loading…"
 )
 
 // incidentPanel is the app's worst active incident in full, as tall as it needs up to maxHeight.
@@ -49,7 +52,7 @@ func (m AppsModel) incidentPanel(app api.App, width, maxHeight int) string {
 	body := incidentPanelBody(incidents[0], m.now(), contentWidth)
 	if len(incidents) > 1 {
 		title = fmt.Sprintf("%ss (%d)", incidentPanelTitle, len(incidents))
-		body += "\n\n" + otherIncidentLines(incidents[1:], contentWidth)
+		body += "\n\n" + otherIncidentLines(incidents[1:], contentWidth) + "\n" + renderHint(keyHint{"enter", moreIncidentsHint})
 	}
 	return panelWithLook(incidentsPanelLook(incidents, false), title, body, width, min(lipgloss.Height(body)+panelChromeHeight, maxHeight))
 }
