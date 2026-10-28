@@ -8,7 +8,25 @@ import (
 	"github.com/statuspane/tui/internal/api"
 )
 
-const affectedPanelTitle = "Affected components"
+const (
+	affectedPanelTitle = "Affected components"
+
+	// Under the status history the affected panel keeps at least its borders, two rows and the line
+	// that counts the operational components.
+	minAffectedRows        = 2
+	operationalCountLines  = 1
+	minAffectedPanelHeight = panelChromeHeight + minAffectedRows + operationalCountLines
+)
+
+// hasAffectedComponents is whether the app's detail is in and some component is not operational.
+func (m AppsModel) hasAffectedComponents(app api.App) bool {
+	appDetail, hasDetail := m.selectedDetail.of(app)
+	if !hasDetail {
+		return false
+	}
+	affected, _ := affectedComponents(appDetail.WatchedComponents)
+	return len(affected) > 0
+}
 
 // affectedPanel lists the app's components that are not operational, the worst first, and counts
 // the operational ones under them. There is none when nothing is affected or the detail is not in.
@@ -23,7 +41,7 @@ func (m AppsModel) affectedPanel(app api.App, width, maxHeight int) string {
 	}
 
 	contentWidth, contentHeight := panelContentSize(width, maxHeight)
-	rowRoom := contentHeight - 1 // the line that counts the operational ones
+	rowRoom := contentHeight - operationalCountLines
 	if rowRoom < 1 {
 		return ""
 	}

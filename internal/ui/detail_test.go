@@ -29,6 +29,17 @@ type fakeAppGetter struct {
 	appDetail api.AppDetail
 	err       error
 	gotSlug   *string
+	// appHistory is what GetAppHistory answers, or historyErr; gotHistorySlug records who it was asked for.
+	appHistory     api.AppHistory
+	historyErr     error
+	gotHistorySlug *string
+}
+
+func (f fakeAppGetter) GetAppHistory(_ context.Context, slug string, _ int) (api.AppHistory, error) {
+	if f.gotHistorySlug != nil {
+		*f.gotHistorySlug = slug
+	}
+	return f.appHistory, f.historyErr
 }
 
 func (f fakeAppGetter) GetApp(_ context.Context, slug string) (api.AppDetail, error) {

@@ -47,3 +47,16 @@ type IncidentUpdate struct {
 	Body       string     `json:"body"`
 	OccurredAt *time.Time `json:"occurred_at"`
 }
+
+// AppHistory is the app's status per UTC day, oldest first. A day with a nil status has no data,
+// which is not the same as operational. The API also sends each watched component's days, which
+// this client does not read yet.
+type AppHistory struct {
+	TrackingSince *time.Time   `json:"tracking_since"`
+	Days          []HistoryDay `json:"days"`
+}
+
+type HistoryDay struct {
+	Date   string  `json:"date"`
+	Status *string `json:"status"`
+}

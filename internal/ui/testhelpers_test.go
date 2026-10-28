@@ -173,15 +173,32 @@ func drainCommands(m AppsModel, cmd tea.Cmd) AppsModel {
 	return m
 }
 
-// modelWithDetail is the screen with one app, "web-app", whose detail has loaded.
+// modelWithDetail is the screen with one app, "web-app", whose detail has loaded, with a full
+// window of history behind it.
 func modelWithDetail(t *testing.T, appDetail api.AppDetail, width, height int) AppsModel {
+	t.Helper()
+	trackingSince := time.Date(2026, time.October, 3, 0, 0, 0, 0, time.UTC)
+	return modelWithHistory(t, appDetail, operationalHistory(&trackingSince), nil, width, height)
+}
+
+// modelWithHistory is the same with the history it is given, or the error its request fails with.
+func modelWithHistory(t *testing.T, appDetail api.AppDetail, appHistory api.AppHistory, historyErr error, width, height int) AppsModel {
 	t.Helper()
 	backend := fakeAppsBackend{
 		fakeAppLister: fakeAppLister{apps: []api.App{{Name: "Web App", Slug: "web-app", Status: stringPtr("degraded_performance"), WatchedComponentsCount: 2}}},
-		fakeAppGetter: fakeAppGetter{appDetail: appDetail},
+		fakeAppGetter: fakeAppGetter{appDetail: appDetail, appHistory: appHistory, historyErr: historyErr},
 	}
 	m := NewAppsModel(backend)
 	m.now = func() time.Time { return detailNow }
 	m, _ = send(m, tea.WindowSizeMsg{Width: width, Height: height})
 	return drainCommands(m, m.Init())
+}
+
+func operationalHistory(trackingSince *time.Time) api.AppHistory {
+	appHistory := api.AppHistory{TrackingSince: trackingSince}
+	firstDay := detailNow.AddDate(0, 0, 1-historyDayCount)
+	for offset := range historyDayCount {
+		appHistory.Days = append(appHistory.Days, api.HistoryDay{Date: firstDay.AddDate(0, 0, offset).Format(time.DateOnly), Status: stringPtr("operational")})
+	}
+	return appHistory
 }

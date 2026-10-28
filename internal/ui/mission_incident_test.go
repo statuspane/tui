@@ -58,6 +58,7 @@ func TestSeveralIncidentsShowTheFirstInFullAndTheRestOnALineEach(t *testing.T) {
 	view := plain(t, m.View().Content)
 
 	assertViewContains(t, view, "Active incidents (2)", "Git operations degraded", "We are investigating elevated errors.")
+	assertViewContains(t, view, "enter to read every incident in full")
 	line := lineContaining(t, view, "DNS resolution slow")
 	assertViewContains(t, line, "cloudflare", "monitoring")
 }
@@ -92,4 +93,10 @@ func TestAStatusThatIsNotAStepHasNoProgressLine(t *testing.T) {
 			t.Errorf("progressLine(%v) = %q, want none", status, got)
 		}
 	}
+}
+
+func TestWithOneIncidentThereIsNothingMoreToReadSoNoHint(t *testing.T) {
+	m := modelWithDetail(t, degradedAppDetail(), testWidth, testHeight)
+
+	assertViewLacks(t, plain(t, m.View().Content), "to read every incident in full")
 }

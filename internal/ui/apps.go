@@ -27,10 +27,11 @@ type AppLister interface {
 }
 
 // AppsBackend is what the apps screen needs from the API client: the list, and the selected
-// app's detail for its banner.
+// app's detail and history.
 type AppsBackend interface {
 	AppLister
 	AppGetter
+	AppHistoryGetter
 }
 
 // openAppMsg asks the root model to show one app's detail screen.
@@ -51,6 +52,7 @@ type AppsModel struct {
 	backend         AppsBackend
 	apps            []api.App
 	selectedDetail  selectedDetail
+	selectedHistory selectedHistory
 	now             func() time.Time
 	err             error
 	hasLoaded       bool
@@ -65,7 +67,7 @@ type AppsModel struct {
 }
 
 func NewAppsModel(backend AppsBackend) AppsModel {
-	return AppsModel{backend: backend, selectedDetail: newSelectedDetail(), now: time.Now, isLoading: true, spinner: spinner.New(), hasDarkBackground: true}
+	return AppsModel{backend: backend, selectedDetail: newSelectedDetail(), selectedHistory: newSelectedHistory(), now: time.Now, isLoading: true, spinner: spinner.New(), hasDarkBackground: true}
 }
 
 func (m AppsModel) Init() tea.Cmd {
@@ -89,7 +91,7 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apps, m.err, m.hasLoaded, m.isLoading = msg.apps, nil, true, false
 		m.selectedIndex = min(m.selectedIndex, max(len(m.apps)-1, 0))
 		next, cmd := m.reloadOrScheduleRefresh()
-		return next, tea.Batch(cmd, m.fetchSelectedDetailCmd())
+		return next, tea.Batch(cmd, m.fetchSelectedAppCmd())
 
 	case clockTickMsg:
 		return m, clockTickCmd()
@@ -98,10 +100,18 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.selectedDetail.hasRested(msg) {
 			return m, nil
 		}
-		return m, m.fetchSelectedDetailCmd()
+		return m, m.fetchSelectedAppCmd()
 
 	case selectedDetailLoadedMsg:
 		m.selectedDetail = m.selectedDetail.withLoaded(msg)
+		return m, nil
+
+	case selectedHistoryLoadedMsg:
+		m.selectedHistory = m.selectedHistory.withLoaded(msg)
+		return m, nil
+
+	case selectedHistoryFailedMsg:
+		m.selectedHistory = m.selectedHistory.withFailed(msg)
 		return m, nil
 
 	case appsFailedMsg:
@@ -241,13 +251,13 @@ func (m AppsModel) refreshNotice() string {
 	return ""
 }
 
-// fetchSelectedDetailCmd asks for the selected app's detail.
-func (m AppsModel) fetchSelectedDetailCmd() tea.Cmd {
+// fetchSelectedAppCmd asks for the selected app's detail and its history, as two requests.
+func (m AppsModel) fetchSelectedAppCmd() tea.Cmd {
 	app, ok := m.selectedApp()
 	if !ok {
 		return nil
 	}
-	return fetchSelectedAppDetail(m.backend, app)
+	return tea.Batch(fetchSelectedAppDetail(m.backend, app), fetchSelectedAppHistory(m.backend, app))
 }
 
 func fetchApps(appLister AppLister) tea.Cmd {

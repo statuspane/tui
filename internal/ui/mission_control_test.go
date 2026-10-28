@@ -210,3 +210,24 @@ func TestTheSidebarTakesAQuarterOfTheWidthWithinLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestHistoryGivesWayBeforeTheIncidentOrTheAffectedComponentsAreSqueezed(t *testing.T) {
+	cases := []struct {
+		name              string
+		roomAfterIncident int
+		hasAffected       bool
+		want              bool
+	}{
+		{"exactly the strip", historyPanelHeight, false, true},
+		{"one line short of the strip", historyPanelHeight - 1, false, false},
+		{"the strip and the least the components need", historyPanelHeight + minAffectedPanelHeight, true, true},
+		{"one line short of the components' least", historyPanelHeight + minAffectedPanelHeight - 1, true, false},
+		{"room to spare but nothing affected", historyPanelHeight + minAffectedPanelHeight - 1, false, true},
+	}
+
+	for _, testCase := range cases {
+		if got := hasRoomForHistory(testCase.roomAfterIncident, testCase.hasAffected); got != testCase.want {
+			t.Errorf("%s: hasRoomForHistory(%d, %v) = %v, want %v", testCase.name, testCase.roomAfterIncident, testCase.hasAffected, got, testCase.want)
+		}
+	}
+}

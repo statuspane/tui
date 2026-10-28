@@ -35,8 +35,9 @@ title colours are a `panelLook`; `panel` uses the default one, `panelWithLook` t
 
 The apps screen (`AppsModel`, laid out in `mission_control.go`) is a sidebar panel of apps (a status
 dot and a name; the selected row is tinted) and, beside it, the selected app's panels stacked:
-`banner` (status headline and facts), `incidentPanel` (`mission_incident.go`) and `affectedPanel`
-(`mission_components.go`). Each is as tall as its content needs, and what is left of the column is
+`banner` (status headline and facts), `historyPanel` (`mission_history.go`: a strip of the last
+days, the most recent that fit), `incidentPanel` (`mission_incident.go`) and
+`affectedPanel` (`mission_components.go`). Each is as tall as its content needs, and what is left of the column is
 empty. The loading, error and empty states are one full-width "Apps" panel instead, because
 the sidebar is too narrow for a message. The header counts the apps in each status and shows the
 clock at the right.
@@ -137,6 +138,18 @@ what doesn't fit; a panel also cuts a title that is too long, such as an app's n
   silent: the banner falls back to the list's own count of components. The answer is
   `selectedDetailLoadedMsg`, not `appDetailLoadedMsg`: the root sends every non-key message to
   both screens and the app screen would take the other one for its own.
+- The history is a second request next to the detail (`fetchSelectedAppCmd` asks for both), so a
+  failure of one never touches the other: the strip says "History unavailable" and the banner,
+  incident and components are as they were. `selectedHistory` (`selected_history.go`) owns it, as
+  `selectedDetail` owns the detail: its answer does not name the app, so `selectedHistoryLoadedMsg`
+  carries the slug it was asked for. `of` says whether it has arrived, failed or is still on its
+  way, and a history that arrived is never replaced by a later failure. A day with a nil status is
+  dots, never a block: no data is not operational.
+- Space on the apps screen goes to the incident first, then the affected components (at least
+  `minAffectedPanelHeight` when there are any), and the history gets what is left
+  (`hasRoomForHistory`, a function of numbers: ask the data whether there are affected components,
+  never render a panel to find out); on a short window the strip is simply not drawn. Compare with
+  the room, not with a panel's height: a panel is never drawn shorter than `minPanelHeight`.
 - Text in a panel that is narrower than its text is wrapped or shortened by us, never left to the
   panel's cut: `factsLine` puts short phrases each on a line when they don't fit one, and
   `progressLine` names only the current step when the four don't fit. Check a new line at

@@ -21,6 +21,17 @@ const (
 	appsPanelName         = "Apps"
 )
 
+// hasRoomForHistory is whether the status history fits in the room left under the incident without
+// taking what the affected components (when there are any) need: History is the first thing to
+// give way on a short window.
+func hasRoomForHistory(roomAfterIncident int, hasAffected bool) bool {
+	affectedNeed := 0
+	if hasAffected {
+		affectedNeed = minAffectedPanelHeight
+	}
+	return roomAfterIncident-historyPanelHeight >= affectedNeed
+}
+
 // bannerHeadlines are what a banner says for each status. A status this client doesn't know is
 // said as it is, in capitals.
 var bannerHeadlines = map[string]string{
@@ -100,16 +111,26 @@ func (m AppsModel) sidebarRow(appIndex, contentWidth int) string {
 	return row + selectedRowStyle.Render(strings.Repeat(" ", max(contentWidth-lipgloss.Width(row), 0)))
 }
 
-// selectedAppPanels are the selected app's banner, incident and affected components, stacked.
+// selectedAppPanels are the selected app's banner, status history, incident and affected components,
+// stacked.
 func (m AppsModel) selectedAppPanels(width, height int) string {
 	app, ok := m.selectedApp()
 	if !ok {
 		return panel("", "", width, height)
 	}
 	banner := m.banner(app, width)
-	incident := m.incidentPanel(app, width, height-lipgloss.Height(banner))
-	panels := []string{banner, incident}
-	if affected := m.affectedPanel(app, width, height-lipgloss.Height(banner)-lipgloss.Height(incident)); affected != "" {
+	room := height - lipgloss.Height(banner)
+	incident := m.incidentPanel(app, width, room)
+
+	panels := []string{banner}
+	if hasRoomForHistory(room-lipgloss.Height(incident), m.hasAffectedComponents(app)) {
+		strip := m.historyPanel(app, width)
+		panels = append(panels, strip)
+		room -= lipgloss.Height(strip)
+	}
+	panels = append(panels, incident)
+	room -= lipgloss.Height(incident)
+	if affected := m.affectedPanel(app, width, room); affected != "" {
 		panels = append(panels, affected)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, panels...)
