@@ -6,6 +6,14 @@ All notable user-facing changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The apps screen shows the selected app's status history: a strip with a block for each of its
+  last 30 days, coloured by that day's worst status, with a dot where StatusPane has no data for the
+  day (which is not the same as operational) and a line saying when it began tracking. A narrow
+  window shows the most recent days that fit. The strip makes room for the incident and the
+  affected components first, so on a short window it is left out.
+
 ### Changed
 
 - The apps list is now a Mission control screen: your apps in a sidebar and, beside it, the

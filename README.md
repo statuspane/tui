@@ -50,7 +50,8 @@ that work there.
 
 **Apps.** Your apps are in a sidebar on the left, each with a dot in its status colour, and the
 selected one is explained on the right: a banner with its status and how many of its components are
-affected, its active incident with a progress line (investigating, identified, monitoring,
+affected, its status history (a block for each of its last 30 days, coloured by that day's worst
+status, with a dot where there is no data; it is left out on a window too short for it), its active incident with a progress line (investigating, identified, monitoring,
 resolved), and the components that are not operational, the worst first. The header counts your
 apps in each status and shows the time in your timezone, with "live" while the screen is refreshing and "not
 refreshing" once a refresh fails. `↑/↓` change the selected app (its details load once you stop on
