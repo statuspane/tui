@@ -10,6 +10,7 @@ import (
 type Backend interface {
 	AppLister
 	AppGetter
+	AppHistoryGetter
 	AppCreator
 	AppRenamer
 	AppDeleter

@@ -15,11 +15,27 @@ const (
 	sidebarMinWidth     = 28
 	sidebarMaxWidth     = 40
 
+	// Under the status history, the affected components keep at least this much: their borders, two
+	// rows and the line that counts the operational ones.
+	minAffectedPanelHeight = 5
+
 	statusDot             = "●"
 	sidebarSelectedMark   = "▎"
 	sidebarUnselectedMark = " "
 	appsPanelName         = "Apps"
 )
+
+// hasRoomForHistory is whether the status history fits without taking room the incident (which is
+// as tall as it is) or the affected components (which keep at least minAffectedPanelHeight, when
+// there are any) need. History is the first thing to give way on a short window.
+func (m AppsModel) hasRoomForHistory(app api.App, width, room, incidentHeight int) bool {
+	roomAfterIncident := room - incidentHeight
+	affectedNeed := 0
+	if m.affectedPanel(app, width, roomAfterIncident) != "" {
+		affectedNeed = minAffectedPanelHeight
+	}
+	return roomAfterIncident-historyPanelHeight >= affectedNeed
+}
 
 // bannerHeadlines are what a banner says for each status. A status this client doesn't know is
 // said as it is, in capitals.
@@ -100,16 +116,26 @@ func (m AppsModel) sidebarRow(appIndex, contentWidth int) string {
 	return row + selectedRowStyle.Render(strings.Repeat(" ", max(contentWidth-lipgloss.Width(row), 0)))
 }
 
-// selectedAppPanels are the selected app's banner, incident and affected components, stacked.
+// selectedAppPanels are the selected app's banner, status history, incident and affected components,
+// stacked.
 func (m AppsModel) selectedAppPanels(width, height int) string {
 	app, ok := m.selectedApp()
 	if !ok {
 		return panel("", "", width, height)
 	}
 	banner := m.banner(app, width)
-	incident := m.incidentPanel(app, width, height-lipgloss.Height(banner))
-	panels := []string{banner, incident}
-	if affected := m.affectedPanel(app, width, height-lipgloss.Height(banner)-lipgloss.Height(incident)); affected != "" {
+	room := height - lipgloss.Height(banner)
+	incident := m.incidentPanel(app, width, room)
+
+	panels := []string{banner}
+	if m.hasRoomForHistory(app, width, room, lipgloss.Height(incident)) {
+		strip := m.historyPanel(app, width)
+		panels = append(panels, strip)
+		room -= lipgloss.Height(strip)
+	}
+	panels = append(panels, incident)
+	room -= lipgloss.Height(incident)
+	if affected := m.affectedPanel(app, width, room); affected != "" {
 		panels = append(panels, affected)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, panels...)

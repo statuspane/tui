@@ -26,11 +26,17 @@ type AppLister interface {
 	ListApps(ctx context.Context) ([]api.App, error)
 }
 
+// AppHistoryGetter is what the apps screen needs to draw the selected app's history.
+type AppHistoryGetter interface {
+	GetAppHistory(ctx context.Context, slug string, days int) (api.AppHistory, error)
+}
+
 // AppsBackend is what the apps screen needs from the API client: the list, and the selected
-// app's detail for its banner.
+// app's detail and history.
 type AppsBackend interface {
 	AppLister
 	AppGetter
+	AppHistoryGetter
 }
 
 // openAppMsg asks the root model to show one app's detail screen.
@@ -89,7 +95,7 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apps, m.err, m.hasLoaded, m.isLoading = msg.apps, nil, true, false
 		m.selectedIndex = min(m.selectedIndex, max(len(m.apps)-1, 0))
 		next, cmd := m.reloadOrScheduleRefresh()
-		return next, tea.Batch(cmd, m.fetchSelectedDetailCmd())
+		return next, tea.Batch(cmd, m.fetchSelectedAppCmd())
 
 	case clockTickMsg:
 		return m, clockTickCmd()
@@ -98,10 +104,18 @@ func (m AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.selectedDetail.hasRested(msg) {
 			return m, nil
 		}
-		return m, m.fetchSelectedDetailCmd()
+		return m, m.fetchSelectedAppCmd()
 
 	case selectedDetailLoadedMsg:
 		m.selectedDetail = m.selectedDetail.withLoaded(msg)
+		return m, nil
+
+	case selectedHistoryLoadedMsg:
+		m.selectedDetail = m.selectedDetail.withHistoryLoaded(msg)
+		return m, nil
+
+	case selectedHistoryFailedMsg:
+		m.selectedDetail = m.selectedDetail.withHistoryFailed(msg)
 		return m, nil
 
 	case appsFailedMsg:
@@ -241,13 +255,13 @@ func (m AppsModel) refreshNotice() string {
 	return ""
 }
 
-// fetchSelectedDetailCmd asks for the selected app's detail.
-func (m AppsModel) fetchSelectedDetailCmd() tea.Cmd {
+// fetchSelectedAppCmd asks for the selected app's detail and its history, as two requests.
+func (m AppsModel) fetchSelectedAppCmd() tea.Cmd {
 	app, ok := m.selectedApp()
 	if !ok {
 		return nil
 	}
-	return fetchSelectedAppDetail(m.backend, app)
+	return tea.Batch(fetchSelectedAppDetail(m.backend, app), fetchSelectedAppHistory(m.backend, app))
 }
 
 func fetchApps(appLister AppLister) tea.Cmd {
